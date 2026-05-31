@@ -25,8 +25,8 @@
 ### Integration & Quality
 - [x] `tests/test_ingestion.py` covering all 3 endpoints
 - [x] CORS configured — no browser console errors
-- [ ] Generator script verified → logs appear in viewer within 5 seconds
-- [ ] `docker compose down && up` — data persists (volume configured)
+- [x] Generator script verified → logs appear in viewer within 5 seconds
+- [x] `docker compose down && up` — data persists (volume configured)
 
 ### Stretch Goals
 - [ ] `POST /ingest/windows_event` — Windows Event XML
