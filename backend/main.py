@@ -14,8 +14,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from database import engine, Base
-from routers import ingest, logs
+from database import engine, Base, AsyncSessionLocal
+from routers import ingest, logs, rules
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -29,10 +29,12 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("✅ Database tables ready")
+    async with AsyncSessionLocal() as db:
+        await rules.seed_builtin_rules(db)
+        print("✅ Built-in rules seeded")
     yield
     # Cleanup (close connections) on shutdown
     await engine.dispose()
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # App instance
@@ -70,7 +72,7 @@ app.add_middleware(
 
 app.include_router(ingest.router)
 app.include_router(logs.router)
-
+app.include_router(rules.router)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Health check
