@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import LogTable from './components/LogTable.jsx'
+import AlertsPanel from './components/AlertsPanel.jsx'
 import StatsBar from './components/StatsBar.jsx'
 
 // Base URL for API calls
@@ -90,6 +91,7 @@ export default function App() {
       </nav>
 
       <main style={styles.main}>
+	<AlertsPanel apiBase={API_BASE} />
         <StatsBar apiBase={API_BASE} />
         <LogTable apiBase={API_BASE} />
       </main>

@@ -1,0 +1,207 @@
+import { useState, useEffect, useRef } from 'react'
+
+const SEVERITY_COLORS = {
+  CRITICAL: { bg: '#4a0e0e', color: '#ff7b72', border: '#f85149' },
+  HIGH:     { bg: '#3d1c1c', color: '#f85149', border: '#da3633' },
+  MEDIUM:   { bg: '#3d2b00', color: '#e3b341', border: '#9e6a03' },
+  LOW:      { bg: '#1f3a5f', color: '#58a6ff', border: '#1f6feb' },
+}
+
+const STATUS_COLORS = {
+  NEW:           { bg: '#3d1c1c', color: '#f85149' },
+  ACKNOWLEDGED:  { bg: '#3d2b00', color: '#e3b341' },
+  INVESTIGATING: { bg: '#1f3a5f', color: '#58a6ff' },
+  RESOLVED:      { bg: '#1a2f1a', color: '#3fb950' },
+}
+
+const NEXT_STATUS = {
+  NEW:           'ACKNOWLEDGED',
+  ACKNOWLEDGED:  'INVESTIGATING',
+  INVESTIGATING: 'RESOLVED',
+  RESOLVED:      null,
+}
+
+const STATUS_LABELS = {
+  NEW:           '🔴 New',
+  ACKNOWLEDGED:  '🟡 Acknowledged',
+  INVESTIGATING: '🔵 Investigating',
+  RESOLVED:      '🟢 Resolved',
+}
+
+export default function AlertsPanel({ apiBase }) {
+  const [alerts, setAlerts] = useState([])
+  const [total, setTotal] = useState(0)
+  const [filter, setFilter] = useState('NEW')
+  const [loading, setLoading] = useState(false)
+  const wsRef = useRef(null)
+
+  const fetchAlerts = async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({ page_size: 50 })
+      if (filter !== 'ALL') params.set('status', filter)
+      const res = await fetch(`${apiBase}/alerts?${params}`)
+      const data = await res.json()
+      setAlerts(data.alerts || [])
+      setTotal(data.total || 0)
+    } catch (e) {
+      console.error('Failed to fetch alerts:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // WebSocket connection for real-time alerts
+  useEffect(() => {
+    const wsUrl = apiBase.replace('http', 'ws') + '/ws/alerts'
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+
+    ws.onmessage = (event) => {
+      const newAlert = JSON.parse(event.data)
+      // Add new alert to top of list if filter matches
+      if (filter === 'ALL' || filter === 'NEW') {
+        setAlerts(prev => [newAlert, ...prev.slice(0, 49)])
+        setTotal(prev => prev + 1)
+      }
+    }
+
+    ws.onerror = () => console.log('[WS] Alert WebSocket error')
+    ws.onclose = () => console.log('[WS] Alert WebSocket closed')
+
+    return () => ws.close()
+  }, [apiBase, filter])
+
+  useEffect(() => { fetchAlerts() }, [filter])
+
+  // Auto refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchAlerts, 30_000)
+    return () => clearInterval(interval)
+  }, [filter])
+
+  const transitionStatus = async (alertId, newStatus) => {
+    try {
+      await fetch(`${apiBase}/alerts/${alertId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      fetchAlerts()
+    } catch (e) {
+      console.error('Failed to update alert:', e)
+    }
+  }
+
+  const s = {
+    card: {
+      background: '#161b22', border: '1px solid #30363d',
+      borderRadius: '10px', overflow: 'hidden', marginBottom: '24px',
+    },
+    header: {
+      padding: '14px 16px', borderBottom: '1px solid #30363d',
+      display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+    },
+    title: { color: '#e6edf3', fontWeight: 700, fontSize: '15px' },
+    filterBtn: (active) => ({
+      background: active ? '#1f6feb' : '#21262d',
+      border: `1px solid ${active ? '#58a6ff' : '#30363d'}`,
+      color: active ? '#fff' : '#8b949e',
+      borderRadius: '6px', padding: '5px 12px',
+      fontSize: '12px', cursor: 'pointer',
+    }),
+    alertRow: {
+      padding: '14px 16px', borderBottom: '1px solid #21262d',
+      display: 'flex', alignItems: 'flex-start', gap: '12px',
+    },
+    badge: (colors) => ({
+      background: colors.bg, color: colors.color,
+      border: `1px solid ${colors.border || colors.color}`,
+      borderRadius: '4px', padding: '2px 8px',
+      fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap',
+    }),
+    actionBtn: {
+      background: '#21262d', border: '1px solid #30363d',
+      color: '#8b949e', borderRadius: '6px',
+      padding: '4px 10px', fontSize: '11px', cursor: 'pointer',
+    },
+    empty: {
+      padding: '40px', textAlign: 'center',
+      color: '#484f58', fontSize: '14px',
+    },
+  }
+
+  return (
+    <div style={s.card}>
+      <div style={s.header}>
+        <span style={s.title}>🚨 Alerts ({total})</span>
+        {['ALL', 'NEW', 'ACKNOWLEDGED', 'INVESTIGATING', 'RESOLVED'].map(f => (
+          <button key={f} style={s.filterBtn(filter === f)}
+            onClick={() => setFilter(f)}>
+            {f}
+          </button>
+        ))}
+        <button style={{ ...s.filterBtn(false), marginLeft: 'auto' }}
+          onClick={fetchAlerts}>↻ Refresh</button>
+      </div>
+
+      {alerts.length === 0 ? (
+        <div style={s.empty}>
+          {loading ? '⏳ Loading...' : '✅ No alerts matching this filter'}
+        </div>
+      ) : (
+        alerts.map(alert => {
+          const sevColors = SEVERITY_COLORS[alert.severity] || SEVERITY_COLORS.LOW
+          const statColors = STATUS_COLORS[alert.status] || STATUS_COLORS.NEW
+          const nextStatus = NEXT_STATUS[alert.status]
+
+          return (
+            <div key={alert.id} style={s.alertRow}>
+              {/* Severity badge */}
+              <span style={s.badge(sevColors)}>{alert.severity}</span>
+
+              {/* Main content */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ color: '#e6edf3', fontWeight: 600, fontSize: '13px' }}>
+                    {alert.rule_name}
+                  </span>
+                  <span style={s.badge({ ...statColors, border: statColors.color })}>
+                    {STATUS_LABELS[alert.status]}
+                  </span>
+                  {alert.mitre_technique_id && (
+                    <a href={`https://attack.mitre.org/techniques/${alert.mitre_technique_id}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ color: '#58a6ff', fontSize: '11px', textDecoration: 'none' }}>
+                      {alert.mitre_technique_id} ↗
+                    </a>
+                  )}
+                </div>
+                <div style={{ color: '#8b949e', fontSize: '12px', marginTop: '4px' }}>
+                  {alert.group_value && <span>🎯 {alert.group_value} · </span>}
+                  <span>Count: {alert.matched_count} · </span>
+                  <span>First: {new Date(alert.first_seen).toLocaleString()} · </span>
+                  <span>Last: {new Date(alert.last_seen).toLocaleString()}</span>
+                </div>
+                {alert.notes && (
+                  <div style={{ color: '#8b949e', fontSize: '11px', marginTop: '4px',
+                    fontStyle: 'italic' }}>
+                    📝 {alert.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Action button */}
+              {nextStatus && (
+                <button style={s.actionBtn}
+                  onClick={() => transitionStatus(alert.id, nextStatus)}>
+                  → {nextStatus}
+                </button>
+              )}
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+}
