@@ -222,3 +222,72 @@ async def toggle_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     rule.updated_at = datetime.now(timezone.utc)
     await db.commit()
     return {"id": rule_id, "enabled": rule.enabled}
+
+class RuleTestRequest(BaseModel):
+    hours_back: int = 24
+
+
+@router.post("/{rule_id}/test")
+async def test_rule(
+    rule_id: str,
+    body: RuleTestRequest = RuleTestRequest(),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dry-run a rule against historical logs.
+    Returns how many times it would have fired + sample matches.
+    Does NOT create any real alerts.
+    """
+    from datetime import timedelta
+    from sqlalchemy import func, and_
+    from models import Log
+
+    result = await db.execute(
+        select(AlertRule).where(AlertRule.id == uuid.UUID(rule_id))
+    )
+    rule = result.scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=body.hours_back)
+
+    # Build conditions same as engine
+    conditions = [Log.timestamp >= window_start]
+
+    if rule.condition_type in ("threshold", "rate"):
+        values = [v.strip() for v in rule.condition_value.split(",")]
+        if rule.condition_field == "status_code":
+            int_values = [int(v) for v in values if v.isdigit()]
+            if int_values:
+                conditions.append(Log.status_code.in_(int_values))
+    elif rule.condition_type == "pattern_match":
+        conditions.append(Log.message.op("~*")(rule.condition_value))
+    elif rule.condition_type == "new_entity":
+        conditions.append(Log.action.ilike(f"%{rule.condition_value}%"))
+
+    where = and_(*conditions)
+
+    # Get sample matches
+    sample_result = await db.execute(
+        select(Log).where(where).order_by(Log.timestamp.desc()).limit(5)
+    )
+    samples = sample_result.scalars().all()
+
+    # Count total matches
+    count_result = await db.execute(
+        select(func.count()).select_from(Log).where(where)
+    )
+    total = count_result.scalar_one()
+
+    # Would it have fired?
+    would_fire = total >= rule.threshold
+
+    return {
+        "rule_name": rule.name,
+        "would_have_fired": total if would_fire else 0,
+        "total_matches": total,
+        "threshold": rule.threshold,
+        "evaluated_window": f"Last {body.hours_back} hours",
+        "sample_matches": [s.to_dict() for s in samples],
+    }
