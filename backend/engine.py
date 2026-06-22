@@ -1,182 +1,137 @@
 """
-engine.py — Alert Rules Evaluation Engine
+engine.py - Alert Rules Evaluation Engine
 
 Runs every 30 seconds via APScheduler.
 For each enabled rule:
   1. Query logs within the rule's time window
-  2. Group by the rule's group_by field
-  3. If count exceeds threshold → fire an alert
-  4. Deduplicate — don't re-fire if same (rule_id, group_value) is active
+  2. Group by source_ip
+  3. If count exceeds threshold -> fire an alert
+  4. Deduplicate - don't re-fire within cooldown window
 """
 
 import re
 from datetime import datetime, timezone, timedelta
+from sqlalchemy import func, and_, cast
+from sqlalchemy.dialects.postgresql import INET as PG_INET
 
-from sqlalchemy import select, func, and_, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from database import SessionLocal
+from models import AlertRule, Alert, AlertSeverity, AlertStatus, Log
 
-from database import AsyncSessionLocal
-from models import AlertRule, Alert, Log
-
-# WebSocket manager — we'll fill this in later
+# WebSocket manager - connected from main.py
 ws_manager = None
 
 
-async def evaluate_rules():
-    """Main function — called every 30 seconds by APScheduler."""
-    async with AsyncSessionLocal() as db:
-        # Get all enabled rules
-        result = await db.execute(
-            select(AlertRule).where(AlertRule.enabled == True)
-        )
-        rules = result.scalars().all()
-
+def evaluate_rules():
+    """Main function - called every 30 seconds by APScheduler."""
+    db = SessionLocal()
+    try:
+        rules = db.query(AlertRule).filter(AlertRule.enabled == True).all()
         fired = 0
         for rule in rules:
             try:
-                count = await _evaluate_single_rule(db, rule)
+                count = _evaluate_single_rule(db, rule)
                 fired += count
             except Exception as e:
                 print(f"[Engine] Error evaluating rule '{rule.name}': {e}")
-
         if fired:
-            print(f"[Engine] Cycle complete — {fired} alert(s) fired")
+            print(f"[Engine] Cycle complete - {fired} alert(s) fired")
+    finally:
+        db.close()
 
 
-async def _evaluate_single_rule(db: AsyncSession, rule: AlertRule) -> int:
+def _evaluate_single_rule(db, rule: AlertRule) -> int:
     """
     Evaluate one rule against recent logs.
     Returns number of new alerts fired.
     """
     now = datetime.now(timezone.utc)
-    window_start = now - timedelta(seconds=rule.window_seconds)
+    window_start = now - timedelta(seconds=rule.time_window_seconds)
 
-    # Build base condition — filter logs within the time window
+    # Base filter: logs within the time window
     conditions = [Log.timestamp >= window_start]
 
-    # Add rule-specific condition based on condition_type
-    if rule.condition_type == "threshold":
-        # e.g. status_code IN (401, 403)
-        values = [v.strip() for v in rule.condition_value.split(",")]
-        if rule.condition_field == "status_code":
-            int_values = [int(v) for v in values if v.isdigit()]
-            if int_values:
-                conditions.append(Log.status_code.in_(int_values))
-        else:
-            conditions.append(
-                getattr(Log, rule.condition_field, Log.message).in_(values)
-            )
+    # Filter by source_type if specified
+    if rule.source_type:
+        conditions.append(Log.source_type == rule.source_type)
 
-    elif rule.condition_type == "rate":
-        # Same as threshold but focused on rate per minute
-        values = [v.strip() for v in rule.condition_value.split(",")]
-        if rule.condition_field == "status_code":
-            int_values = [int(v) for v in values if v.isdigit()]
-            if int_values:
-                conditions.append(Log.status_code.in_(int_values))
+    # Add condition based on operator
+    field = rule.condition_field
+    operator = rule.condition_operator
+    value = rule.condition_value
 
-    elif rule.condition_type == "pattern_match":
-        # Regex/keyword match on message field
-        pattern = rule.condition_value
-        conditions.append(Log.message.op("~*")(pattern))
-
-    elif rule.condition_type == "new_entity":
-        # Check if source_ip has been seen before the window
-        conditions.append(
-            Log.action.ilike(f"%{rule.condition_value}%")
-        )
+    if hasattr(Log, field):
+        col = getattr(Log, field)
+        if operator == "eq":
+            # Try integer comparison for status_code
+            try:
+                conditions.append(col == int(value))
+            except ValueError:
+                conditions.append(col == value)
+        elif operator == "contains":
+            conditions.append(col.ilike(f"%{value}%"))
+        elif operator == "gt":
+            conditions.append(col > float(value))
+        elif operator == "lt":
+            conditions.append(col < float(value))
 
     where = and_(*conditions)
 
-    # Group by the rule's group_by field if set
-    group_field = rule.group_by
-    if group_field and hasattr(Log, group_field):
-        col = getattr(Log, group_field)
-        rows = await db.execute(
-            select(col, func.count().label("cnt"))
-            .where(where)
-            .group_by(col)
-            .having(func.count() >= rule.threshold)
-        )
-        matches = rows.all()
-    else:
-        # No grouping — just count total
-        count_result = await db.execute(
-            select(func.count()).select_from(Log).where(where)
-        )
-        total = count_result.scalar_one()
-        matches = [(None, total)] if total >= rule.threshold else []
+    # Group by source_ip and count
+    rows = (
+        db.query(Log.source_ip, func.count().label("cnt"))
+        .filter(where)
+        .group_by(Log.source_ip)
+        .having(func.count() >= rule.threshold_count)
+        .all()
+    )
 
-    # Fire alerts for each matching group
     fired = 0
-    for group_value, matched_count in matches:
-        group_str = str(group_value) if group_value is not None else "global"
-        did_fire = await _fire_alert(db, rule, group_str, matched_count, now)
+    for source_ip, matched_count in rows:
+        group_str = str(source_ip) if source_ip else "global"
+        did_fire = _fire_alert(db, rule, group_str, matched_count, now)
         if did_fire:
             fired += 1
 
     return fired
 
 
-async def _fire_alert(
-    db: AsyncSession,
-    rule: AlertRule,
-    group_value: str,
-    matched_count: int,
-    now: datetime,
-) -> bool:
+def _fire_alert(db, rule: AlertRule, source_ip: str, matched_count: int, now: datetime) -> bool:
     """
     Fire an alert if deduplication allows it.
-    Returns True if a new alert was created or updated.
+    Returns True if a new alert was created.
     """
-    # Check for existing active alert for same (rule_id, group_value)
-    existing_result = await db.execute(
-        select(Alert).where(
+    # Check for existing active alert within cooldown
+    cooldown_start = now - timedelta(seconds=rule.cooldown_seconds)
+    existing = (
+        db.query(Alert)
+        .filter(
             and_(
                 Alert.rule_id == rule.id,
-                Alert.group_value == group_value,
-                Alert.status != "RESOLVED",
+                Alert.source_ip == cast(source_ip, PG_INET) if source_ip != "global" else Alert.source_ip == None,
+                Alert.status != AlertStatus.RESOLVED,
+                Alert.triggered_at >= cooldown_start,
             )
         )
+        .first()
     )
-    existing = existing_result.scalar_one_or_none()
 
     if existing:
-        # Check cooldown
-        time_since = (now - existing.last_seen).total_seconds()
-        if time_since < rule.cooldown_seconds:
-            # Within cooldown — just update count and last_seen
-            existing.matched_count += matched_count
-            existing.last_seen = now
-            await db.commit()
-            return False  # not a new alert
-        else:
-            # Cooldown expired — allow re-fire only if resolved
-            # (already checked status != RESOLVED above, so skip)
-            existing.matched_count += matched_count
-            existing.last_seen = now
-            await db.commit()
-            return False
+        # Still within cooldown - don't re-fire
+        return False
 
-    # No existing alert — create a new one
+    # Create new alert
     alert = Alert(
         rule_id=rule.id,
         rule_name=rule.name,
         severity=rule.severity,
-        status="NEW",
-        group_value=group_value,
-        matched_count=matched_count,
-        first_seen=now,
-        last_seen=now,
+        status=AlertStatus.NEW,
+        source_ip=source_ip if source_ip != "global" else None,
+        source_type=rule.source_type,
+        description=f"Rule '{rule.name}' triggered {matched_count} times in {rule.time_window_seconds}s",
         mitre_technique_id=rule.mitre_technique_id,
     )
     db.add(alert)
-    await db.commit()
+    db.commit()
 
-    print(f"[Engine] 🚨 Alert fired: '{rule.name}' | {group_value} | {rule.severity}")
+    print(f"[Engine] Alert fired: '{rule.name}' | {source_ip} | {rule.severity}")
 
-    # Push to WebSocket clients if manager is connected
-    if ws_manager:
-        await ws_manager.broadcast(alert.to_dict())
-
-    return True
