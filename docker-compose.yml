@@ -27,13 +27,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://siem:siem_password@db:5432/siem_db
+      DATABASE_URL: postgresql://siem:siem_password@db:5432/siem_db
       PYTHONUNBUFFERED: "1"
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - ./tests:/app/tests
 
   frontend:
     build: ./frontend
