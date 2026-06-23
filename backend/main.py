@@ -7,6 +7,7 @@ from models import AlertRule, AlertSeverity, CorrelationRule
 from routers import logs, ingest, rules, alerts
 import routers.ioc as ioc
 import engine
+import baseline_engine
 
 scheduler = BackgroundScheduler()
 
@@ -85,7 +86,7 @@ def seed_alert_rules():
             ]
             db.add_all(rules_data)
             db.commit()
-            print("✅ Seeded 5 built-in alert rules")
+            print("Seeded 5 built-in alert rules")
     finally:
         db.close()
 
@@ -96,7 +97,7 @@ def seed_correlation_rules():
     try:
         if db.query(CorrelationRule).count() == 0:
             rule = CorrelationRule(
-                name="SSH Brute Force → Web Login Attempt",
+                name="SSH Brute Force to Web Login Attempt",
                 source_type_a="syslog",
                 condition_a={"action": "ssh_failed"},
                 source_type_b="apache",
@@ -108,7 +109,7 @@ def seed_correlation_rules():
             )
             db.add(rule)
             db.commit()
-            print("✅ Seeded 1 built-in correlation rule")
+            print("Seeded 1 built-in correlation rule")
     finally:
         db.close()
 
@@ -120,12 +121,13 @@ async def lifespan(app: FastAPI):
     seed_alert_rules()
     seed_correlation_rules()
     scheduler.add_job(engine.evaluate_rules, "interval", seconds=30, id="rule_eval")
+    scheduler.add_job(baseline_engine.compute_baselines, "interval", minutes=15, id="baseline_compute")
     scheduler.start()
-    print("✅ Scheduler started")
+    print("Scheduler started")
     yield
     # Shutdown
     scheduler.shutdown()
-    print("✅ Scheduler stopped")
+    print("Scheduler stopped")
 
 
 app = FastAPI(title="Mini SIEM Dashboard", lifespan=lifespan)
