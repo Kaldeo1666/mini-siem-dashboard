@@ -35,6 +35,7 @@ services:
     volumes:
       - ./backend:/app
       - ./tests:/app/tests
+      - ./geoip:/app/geoip
 
   frontend:
     build: ./frontend
