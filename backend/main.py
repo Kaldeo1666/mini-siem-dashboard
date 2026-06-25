@@ -8,12 +8,12 @@ from routers import logs, ingest, rules, alerts
 import routers.ioc as ioc
 import engine
 import baseline_engine
+import anomaly_engine
 
 scheduler = BackgroundScheduler()
 
 
 def seed_alert_rules():
-    """Insert the 5 built-in V1 alert rules if they don't exist."""
     db = SessionLocal()
     try:
         if db.query(AlertRule).count() == 0:
@@ -92,7 +92,6 @@ def seed_alert_rules():
 
 
 def seed_correlation_rules():
-    """Insert the built-in V2 correlation rules if they don't exist."""
     db = SessionLocal()
     try:
         if db.query(CorrelationRule).count() == 0:
@@ -116,16 +115,15 @@ def seed_correlation_rules():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     init_db()
     seed_alert_rules()
     seed_correlation_rules()
     scheduler.add_job(engine.evaluate_rules, "interval", seconds=30, id="rule_eval")
     scheduler.add_job(baseline_engine.compute_baselines, "interval", minutes=15, id="baseline_compute")
+    scheduler.add_job(anomaly_engine.detect_anomalies, "interval", seconds=30, id="anomaly_detect")
     scheduler.start()
     print("Scheduler started")
     yield
-    # Shutdown
     scheduler.shutdown()
     print("Scheduler stopped")
 
