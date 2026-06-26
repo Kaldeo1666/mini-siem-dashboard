@@ -1,30 +1,27 @@
 """
-routers/ingest.py — Three log ingestion endpoints.
+routers/ingest.py - Three log ingestion endpoints.
 
-POST /ingest/json    — accepts a single JSON log or array of logs
-POST /ingest/file    — accepts a multipart file upload (Apache CLF format)
-POST /ingest/syslog  — accepts raw syslog lines in the request body
+POST /ingest/json    - accepts a single JSON log or array of logs
+POST /ingest/file    - accepts a multipart file upload (Apache CLF format)
+POST /ingest/syslog  - accepts raw syslog lines in the request body
+
+V2 addition: every ingested log is checked against active IOC entries.
+If source_ip matches a known-bad IP, ioc_matched=True and a HIGH alert fires.
 """
 
 import re
-from datetime import datetime, timezone
-from typing import Any
-
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy.orm import Session
 from database import get_db
-from models import Log
+from models import Log, IOCEntry, Alert, AlertSeverity, AlertStatus
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _level_from_status(status_code: int | None) -> str:
-    """Derive a severity level from an HTTP status code."""
+def _level_from_status(status_code):
     if status_code is None:
         return "INFO"
     if status_code >= 500:
@@ -36,49 +33,109 @@ def _level_from_status(status_code: int | None) -> str:
     return "INFO"
 
 
-async def _bulk_insert(db: AsyncSession, logs: list[Log]) -> int:
-    """Insert a list of Log objects and commit. Returns count inserted."""
+def _check_ioc_and_flag(db: Session, logs: list):
+    """
+    Cross-reference source_ip of each log against active IOC entries.
+    If match found:
+      - Set log.ioc_matched = True
+      - Fire a HIGH alert (with 60-min deduplication)
+
+    Think of this like a bouncer checking every guest against a blacklist.
+    """
+    # Get all active IP-type IOCs in one query (efficient - one DB call)
+    active_iocs = (
+        db.query(IOCEntry)
+        .filter(IOCEntry.active == True, IOCEntry.type == "ip")
+        .all()
+    )
+
+    if not active_iocs:
+        return
+
+    # Build a dict for fast lookup: {ip_string: ioc_object}
+    ioc_map = {ioc.value: ioc for ioc in active_iocs}
+
+    now = datetime.now(timezone.utc)
+    cooldown_start = now - timedelta(minutes=60)
+
+    for log in logs:
+        if not log.source_ip:
+            continue
+
+        ip_str = str(log.source_ip)
+        if ip_str not in ioc_map:
+            continue
+
+        # Match found!
+        log.ioc_matched = True
+        matched_ioc = ioc_map[ip_str]
+
+        # Check cooldown - don't fire duplicate alerts within 60 minutes
+        existing_alert = (
+            db.query(Alert)
+            .filter(
+                Alert.rule_name == f"IOC Match - {ip_str}",
+                Alert.triggered_at >= cooldown_start,
+                Alert.status != AlertStatus.RESOLVED,
+            )
+            .first()
+        )
+
+        if not existing_alert:
+            alert = Alert(
+                rule_id=None,
+                rule_name=f"IOC Match - {ip_str}",
+                severity=AlertSeverity.HIGH,
+                status=AlertStatus.NEW,
+                source_ip=ip_str,
+                source_type=log.source_type,
+                description=(
+                    f"Log from known-bad IP {ip_str} matched IOC entry. "
+                    f"Description: {matched_ioc.description or 'N/A'}. "
+                    f"Source: {matched_ioc.source or 'N/A'}"
+                ),
+                mitre_technique_id="T1071",
+            )
+            db.add(alert)
+            print(f"[IOC] Alert fired for matched IP: {ip_str}")
+
+
+def _bulk_insert(db: Session, logs: list) -> int:
+    """Insert logs, run IOC check, commit. Returns count inserted."""
+    if not logs:
+        return 0
+    _check_ioc_and_flag(db, logs)
     db.add_all(logs)
-    await db.commit()
+    db.commit()
     return len(logs)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Endpoint 1 — JSON ingestion
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Endpoint 1 - JSON ingestion ───────────────────────────────────────────────
 
 @router.post("/json")
-async def ingest_json(
+def ingest_json(request_data: dict = None, db: Session = Depends(get_db)):
+    """Accept a single JSON log object or array of logs."""
+    from fastapi import Request
+    return {"message": "Use raw request body"}
+
+
+@router.post("/json")
+async def ingest_json_raw(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    """
-    Accept a single JSON log object OR a JSON array of log objects.
-
-    Minimum required field: none — all fields are optional and will be
-    defaulted if missing.  The raw payload is always stored.
-
-    Example body (single):
-        {"timestamp": "2026-05-28T10:00:00Z", "level": "ERROR",
-         "source_ip": "1.2.3.4", "message": "Login failed"}
-
-    Example body (array):
-        [{"message": "event 1"}, {"message": "event 2"}]
-    """
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Body must be valid JSON")
 
-    # Normalize to a list regardless of input shape
-    events: list[dict] = body if isinstance(body, list) else [body]
+    events = body if isinstance(body, list) else [body]
+    records = []
 
-    records: list[Log] = []
     for event in events:
         if not isinstance(event, dict):
-            continue  # skip non-object entries in the array
+            continue
 
-        # Parse timestamp — accept ISO strings or epoch ints
         ts_raw = event.get("timestamp")
         try:
             if isinstance(ts_raw, (int, float)):
@@ -99,60 +156,48 @@ async def ingest_json(
         records.append(Log(
             timestamp=ts,
             source_type=event.get("source_type", "json"),
-            source_host=event.get("source_host", event.get("host", "unknown")),
-            level=event.get("level", _level_from_status(status)).upper(),
             source_ip=event.get("source_ip") or event.get("ip") or None,
             user=event.get("user") or event.get("username") or None,
             action=event.get("action") or event.get("method") or None,
             status_code=status,
             message=str(event.get("message", "")),
             raw=str(event),
+            ioc_matched=False,
         ))
 
-    count = await _bulk_insert(db, records)
+    count = _bulk_insert(db, records)
     return {"ingested": count}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Endpoint 2 — Apache CLF file upload
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Endpoint 2 - Apache CLF file upload ──────────────────────────────────────
 
-# Apache Combined Log Format regex
-# Example line:
-#   127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /index.html HTTP/1.1" 200 2326 "http://ref.com/" "Mozilla/5.0"
 CLF_REGEX = re.compile(
-    r'(?P<ip>\S+)'            # client IP
-    r'\s+\S+'                 # ident (usually -)
-    r'\s+(?P<user>\S+)'       # auth user (- if none)
-    r'\s+\[(?P<time>[^\]]+)\]'# timestamp in [DD/Mon/YYYY:HH:MM:SS ±HHMM]
-    r'\s+"(?P<request>[^"]*)"'# request line  "METHOD /path HTTP/x"
-    r'\s+(?P<status>\d{3})'   # status code
-    r'\s+(?P<size>\S+)'       # response size
-    r'(?:\s+"(?P<referer>[^"]*)")?'  # optional referer
-    r'(?:\s+"(?P<ua>[^"]*)")?'       # optional user-agent
+    r'(?P<ip>\S+)'
+    r'\s+\S+'
+    r'\s+(?P<user>\S+)'
+    r'\s+\[(?P<time>[^\]]+)\]'
+    r'\s+"(?P<request>[^"]*)"'
+    r'\s+(?P<status>\d{3})'
+    r'\s+(?P<size>\S+)'
+    r'(?:\s+"(?P<referer>[^"]*)")?'
+    r'(?:\s+"(?P<ua>[^"]*)")?'
 )
 
 CLF_TIME_FORMAT = "%d/%b/%Y:%H:%M:%S %z"
 
 
-def _parse_clf_line(line: str) -> Log | None:
-    """
-    Parse one Apache CLF line into a Log object.
-    Returns None if the line doesn't match the pattern.
-    """
+def _parse_clf_line(line: str):
     match = CLF_REGEX.match(line.strip())
     if not match:
         return None
 
     d = match.groupdict()
 
-    # Parse timestamp
     try:
         ts = datetime.strptime(d["time"], CLF_TIME_FORMAT)
     except ValueError:
         ts = datetime.now(timezone.utc)
 
-    # Parse request line into method + path
     request_parts = d["request"].split()
     method = request_parts[0] if len(request_parts) >= 1 else None
     path = request_parts[1] if len(request_parts) >= 2 else None
@@ -164,27 +209,21 @@ def _parse_clf_line(line: str) -> Log | None:
     return Log(
         timestamp=ts,
         source_type="apache",
-        source_host="unknown",
-        level=_level_from_status(status),
         source_ip=d["ip"],
         user=user,
         action=action,
         status_code=status,
-        message=f'{d["request"]} → {status}',
+        message=f'{d["request"]} -> {status}',
         raw=line.strip(),
+        ioc_matched=False,
     )
 
 
 @router.post("/file")
 async def ingest_file(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    """
-    Accept a multipart file upload containing Apache CLF log lines.
-    Returns count of successfully ingested records and list of lines
-    that failed to parse.
-    """
     content = await file.read()
     try:
         text = content.decode("utf-8", errors="replace")
@@ -192,32 +231,24 @@ async def ingest_file(
         raise HTTPException(status_code=400, detail="Could not decode file as UTF-8")
 
     lines = text.splitlines()
-    records: list[Log] = []
-    failed: list[str] = []
+    records = []
+    failed = []
 
     for line in lines:
         if not line.strip():
-            continue  # skip blank lines
+            continue
         log = _parse_clf_line(line)
         if log:
             records.append(log)
         else:
             failed.append(line)
 
-    count = await _bulk_insert(db, records) if records else 0
-    return {
-        "ingested": count,
-        "failed": failed,
-        "failed_count": len(failed),
-    }
+    count = _bulk_insert(db, records)
+    return {"ingested": count, "failed_count": len(failed)}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Endpoint 3 — Syslog ingestion
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Endpoint 3 - Syslog ingestion ────────────────────────────────────────────
 
-# RFC 5424 syslog regex
-# <priority>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 RFC5424_REGEX = re.compile(
     r"<(?P<priority>\d+)>"
     r"(?P<version>\d+)\s+"
@@ -230,8 +261,6 @@ RFC5424_REGEX = re.compile(
     r"(?P<message>.*)"
 )
 
-# BSD syslog (RFC 3164)
-# <priority>Month DD HH:MM:SS hostname program[pid]: message
 BSD_REGEX = re.compile(
     r"<(?P<priority>\d+)>"
     r"(?P<month>[A-Za-z]+)\s+"
@@ -243,24 +272,22 @@ BSD_REGEX = re.compile(
 )
 
 SYSLOG_SEVERITY = {
-    0: "CRITICAL", 1: "CRITICAL", 2: "CRITICAL",  # Emergency, Alert, Critical
-    3: "ERROR",                                     # Error
-    4: "WARN",                                      # Warning
-    5: "INFO", 6: "INFO",                           # Notice, Informational
-    7: "DEBUG",                                     # Debug
+    0: "CRITICAL", 1: "CRITICAL", 2: "CRITICAL",
+    3: "ERROR",
+    4: "WARN",
+    5: "INFO", 6: "INFO",
+    7: "DEBUG",
 }
 
 
 def _priority_to_level(priority: int) -> str:
-    severity = priority % 8  # lower 3 bits are severity
+    severity = priority % 8
     return SYSLOG_SEVERITY.get(severity, "INFO")
 
 
-def _parse_syslog_line(line: str) -> Log | None:
-    """Try RFC 5424 first, fall back to BSD syslog."""
+def _parse_syslog_line(line: str):
     line = line.strip()
 
-    # Try RFC 5424
     m = RFC5424_REGEX.match(line)
     if m:
         d = m.groupdict()
@@ -273,22 +300,19 @@ def _parse_syslog_line(line: str) -> Log | None:
         return Log(
             timestamp=ts,
             source_type="syslog",
-            source_host=d["hostname"] if d["hostname"] != "-" else "unknown",
-            level=_priority_to_level(priority),
             source_ip=None,
             user=None,
             action=d["appname"] if d["appname"] != "-" else None,
             status_code=None,
             message=d["message"],
             raw=line,
+            ioc_matched=False,
         )
 
-    # Try BSD syslog
     m = BSD_REGEX.match(line)
     if m:
         d = m.groupdict()
         priority = int(d["priority"])
-        # Build a timestamp (BSD syslog has no year — assume current year)
         current_year = datetime.now().year
         try:
             ts = datetime.strptime(
@@ -301,14 +325,13 @@ def _parse_syslog_line(line: str) -> Log | None:
         return Log(
             timestamp=ts,
             source_type="syslog",
-            source_host=d["hostname"],
-            level=_priority_to_level(priority),
             source_ip=None,
             user=None,
             action=d["program"],
             status_code=None,
             message=d["message"],
             raw=line,
+            ioc_matched=False,
         )
 
     return None
@@ -317,12 +340,8 @@ def _parse_syslog_line(line: str) -> Log | None:
 @router.post("/syslog")
 async def ingest_syslog(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    """
-    Accept raw syslog lines in the request body (one per line).
-    Supports RFC 5424 and BSD syslog (RFC 3164) formats.
-    """
     body = await request.body()
     try:
         text = body.decode("utf-8", errors="replace")
@@ -330,8 +349,8 @@ async def ingest_syslog(
         raise HTTPException(status_code=400, detail="Could not decode body as UTF-8")
 
     lines = text.splitlines()
-    records: list[Log] = []
-    failed: list[str] = []
+    records = []
+    failed = []
 
     for line in lines:
         if not line.strip():
@@ -342,9 +361,5 @@ async def ingest_syslog(
         else:
             failed.append(line)
 
-    count = await _bulk_insert(db, records) if records else 0
-    return {
-        "ingested": count,
-        "failed": failed,
-        "failed_count": len(failed),
-    }
+    count = _bulk_insert(db, records)
+    return {"ingested": count, "failed_count": len(failed)}
