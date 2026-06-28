@@ -9,6 +9,7 @@ import routers.ioc as ioc
 import engine
 import baseline_engine
 import anomaly_engine
+import correlation_engine
 
 scheduler = BackgroundScheduler()
 
@@ -121,6 +122,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(engine.evaluate_rules, "interval", seconds=30, id="rule_eval")
     scheduler.add_job(baseline_engine.compute_baselines, "interval", minutes=15, id="baseline_compute")
     scheduler.add_job(anomaly_engine.detect_anomalies, "interval", seconds=30, id="anomaly_detect")
+    scheduler.add_job(correlation_engine.run_correlation, "interval", seconds=30, id="correlation_run")
     scheduler.start()
     print("Scheduler started")
     yield
