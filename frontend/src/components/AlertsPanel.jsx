@@ -170,18 +170,34 @@ export default function AlertsPanel({ apiBase }) {
                     {STATUS_LABELS[alert.status]}
                   </span>
                   {alert.mitre_technique_id && (
-                    <a href={`https://attack.mitre.org/techniques/${alert.mitre_technique_id}`}
-                      target="_blank" rel="noreferrer"
-                      style={{ color: '#58a6ff', fontSize: '11px', textDecoration: 'none' }}>
-                      {alert.mitre_technique_id} ↗
-                    </a>
-                  )}
+  
+    href={`https://attack.mitre.org/techniques/${alert.mitre_technique_id}/`}
+    target="_blank"
+    rel="noreferrer"
+    style={{
+      background: '#0d1117',
+      color: '#79c0ff',
+      border: '1px solid #1f6feb',
+      borderRadius: '4px',
+      padding: '2px 8px',
+      fontSize: '11px',
+      fontWeight: 700,
+      textDecoration: 'none',
+      fontFamily: 'monospace',
+      whiteSpace: 'nowrap',
+    }}
+  >
+    MITRE {alert.mitre_technique_id} ↗
+  </a>
+)}
                 </div>
                 <div style={{ color: '#8b949e', fontSize: '12px', marginTop: '4px' }}>
-                  {alert.group_value && <span>🎯 {alert.group_value} · </span>}
-                  <span>Count: {alert.matched_count} · </span>
-                  <span>First: {new Date(alert.first_seen).toLocaleString()} · </span>
-                  <span>Last: {new Date(alert.last_seen).toLocaleString()}</span>
+                  {alert.source_ip && <span>IP: {alert.source_ip} · </span>}
+                  {alert.source_type && <span>Source: {alert.source_type} · </span>}
+                  <span>Triggered: {new Date(alert.triggered_at).toLocaleString()}</span>
+                  {alert.description && (
+                    <div style={{ marginTop: '4px', color: '#6e7681' }}>{alert.description}</div>
+                  )}
                 </div>
                 {alert.notes && (
                   <div style={{ color: '#8b949e', fontSize: '11px', marginTop: '4px',
