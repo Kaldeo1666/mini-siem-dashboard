@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Log, IOCEntry, Alert, AlertSeverity, AlertStatus
+from geoip.resolver import resolve_ip
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
@@ -101,22 +102,33 @@ def _check_ioc_and_flag(db: Session, logs: list):
 
 
 def _bulk_insert(db: Session, logs: list) -> int:
-    """Insert logs, run IOC check, commit. Returns count inserted."""
+    """Insert logs, run IOC check, resolve GeoIP, commit. Returns count inserted."""
     if not logs:
         return 0
     _check_ioc_and_flag(db, logs)
+    _enrich_geoip(db, logs)
     db.add_all(logs)
     db.commit()
     return len(logs)
+def _enrich_geoip(db: Session, logs: list):
+    """
+    Resolve each unique source_ip in this batch and populate/refresh
+    the geoip_cache table. We don't store country/city on the Log row
+    itself — other parts of the app look it up from geoip_cache by IP
+    when needed (e.g. the top-IPs table, alert cards).
+    """
+    seen_ips = set()
+    for log in logs:
+        if not log.source_ip:
+            continue
+        ip_str = str(log.source_ip)
+        if ip_str in seen_ips:
+            continue
+        seen_ips.add(ip_str)
+        resolve_ip(db, ip_str)
 
 
-# ── Endpoint 1 - JSON ingestion ───────────────────────────────────────────────
 
-@router.post("/json")
-def ingest_json(request_data: dict = None, db: Session = Depends(get_db)):
-    """Accept a single JSON log object or array of logs."""
-    from fastapi import Request
-    return {"message": "Use raw request body"}
 
 
 @router.post("/json")
@@ -156,6 +168,8 @@ async def ingest_json_raw(
         records.append(Log(
             timestamp=ts,
             source_type=event.get("source_type", "json"),
+            source_host=event.get("source_host"),
+            level=event.get("level"),
             source_ip=event.get("source_ip") or event.get("ip") or None,
             user=event.get("user") or event.get("username") or None,
             action=event.get("action") or event.get("method") or None,
@@ -244,7 +258,7 @@ async def ingest_file(
             failed.append(line)
 
     count = _bulk_insert(db, records)
-    return {"ingested": count, "failed_count": len(failed)}
+    return {"ingested": count, "failed_count": len(failed), "failed": failed}
 
 
 # ── Endpoint 3 - Syslog ingestion ────────────────────────────────────────────
@@ -362,4 +376,6 @@ async def ingest_syslog(
             failed.append(line)
 
     count = _bulk_insert(db, records)
-    return {"ingested": count, "failed_count": len(failed)}
+    return {"ingested": count, "failed_count": len(failed), "failed": failed}
+
+
