@@ -34,15 +34,15 @@ async def list_alerts(
     if severity:
         conditions.append(Alert.severity == severity.upper())
     where = and_(*conditions) if conditions else True
-    total = (await db.execute(select(func.count()).select_from(Alert).where(where))).scalar_one()
+    total = (db.execute(select(func.count()).select_from(Alert).where(where))).scalar_one()
     offset = (page - 1) * page_size
-    result = await db.execute(select(Alert).where(where).order_by(Alert.last_seen.desc()).offset(offset).limit(page_size))
+    result = db.execute(select(Alert).where(where).order_by(Alert.triggered_at.desc()).offset(offset).limit(page_size))
     alerts = result.scalars().all()
     return {"total": total, "page": page, "page_size": page_size, "alerts": [a.to_dict() for a in alerts]}
 
 @router.get("/{alert_id}")
 async def get_alert(alert_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Alert).where(Alert.id == uuid.UUID(alert_id)))
+    result = db.execute(select(Alert).where(Alert.id == int(alert_id)))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -50,7 +50,7 @@ async def get_alert(alert_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{alert_id}/status")
 async def update_alert_status(alert_id: str, body: StatusUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Alert).where(Alert.id == uuid.UUID(alert_id)))
+    result = db.execute(select(Alert).where(Alert.id == int(alert_id)))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -68,5 +68,7 @@ async def update_alert_status(alert_id: str, body: StatusUpdate, db: AsyncSessio
         existing = alert.notes or ""
         timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
         alert.notes = f"{existing}\n[{timestamp}] {body.notes}".strip()
-    await db.commit()
+    db.commit()
     return alert.to_dict()
+
+
