@@ -155,6 +155,10 @@ app.include_router(ingest.router)
 app.include_router(rules.router)
 app.include_router(alerts.router)
 app.include_router(ioc.router)
+@app.get("/health")
+def health_check():
+    """Simple liveness check — used by tests and monitoring."""
+    return {"status": "ok"}
 
 
 @app.get("/baselines/visualize")
