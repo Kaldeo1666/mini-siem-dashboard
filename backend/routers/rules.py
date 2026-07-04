@@ -21,6 +21,12 @@ from database import get_db
 from models import AlertRule
 
 router = APIRouter(prefix="/rules", tags=["rules"])
+# Maps public API field names (used in request/response JSON) to the
+# actual database column names, since they differ slightly.
+FIELD_MAP = {"threshold": "threshold_count", "window_seconds": "time_window_seconds"}
+
+def _map_fields(data: dict) -> dict:
+    return {FIELD_MAP.get(k, k): v for k, v in data.items()}
 
 
 # ── Pydantic schemas (request/response shapes) ────────────────────────────────
@@ -133,12 +139,12 @@ BUILTIN_RULES = [
 async def seed_builtin_rules(db: AsyncSession):
     """Insert built-in rules if they don't already exist (checked by name)."""
     for rule_data in BUILTIN_RULES:
-        existing = await db.execute(
+        existing = db.execute(
             select(AlertRule).where(AlertRule.name == rule_data["name"])
         )
         if existing.scalar_one_or_none() is None:
-            db.add(AlertRule(**rule_data))
-    await db.commit()
+            db.add(AlertRule(**_map_fields(rule_data)))
+    db.commit()
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -146,7 +152,7 @@ async def seed_builtin_rules(db: AsyncSession):
 @router.get("")
 async def list_rules(db: AsyncSession = Depends(get_db)):
     """Return all alert rules ordered by severity."""
-    result = await db.execute(
+    result = db.execute(
         select(AlertRule).order_by(AlertRule.created_at.asc())
     )
     rules = result.scalars().all()
@@ -156,17 +162,17 @@ async def list_rules(db: AsyncSession = Depends(get_db)):
 @router.post("")
 async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
     """Create a new alert rule."""
-    rule = AlertRule(**body.model_dump())
+    rule = AlertRule(**_map_fields(body.model_dump()))
     db.add(rule)
-    await db.commit()
+    db.commit()
     return rule.to_dict()
 
 
 @router.get("/{rule_id}")
 async def get_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     """Get a single rule by ID."""
-    result = await db.execute(
-        select(AlertRule).where(AlertRule.id == uuid.UUID(rule_id))
+    result = db.execute(
+        select(AlertRule).where(AlertRule.id == int(rule_id))
     )
     rule = result.scalar_one_or_none()
     if not rule:
@@ -179,48 +185,48 @@ async def update_rule(
     rule_id: str, body: RuleUpdate, db: AsyncSession = Depends(get_db)
 ):
     """Update an existing rule. Only provided fields are changed."""
-    result = await db.execute(
-        select(AlertRule).where(AlertRule.id == uuid.UUID(rule_id))
+    result = db.execute(
+        select(AlertRule).where(AlertRule.id == int(rule_id))
     )
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
     # Only update fields that were actually provided in the request
-    for field, value in body.model_dump(exclude_unset=True).items():
+    for field, value in _map_fields(body.model_dump(exclude_unset=True)).items():
         setattr(rule, field, value)
 
     rule.updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    db.commit()
     return rule.to_dict()
 
 
 @router.delete("/{rule_id}")
 async def delete_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     """Delete a rule by ID."""
-    result = await db.execute(
-        select(AlertRule).where(AlertRule.id == uuid.UUID(rule_id))
+    result = db.execute(
+        select(AlertRule).where(AlertRule.id == int(rule_id))
     )
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
-    await db.delete(rule)
-    await db.commit()
+    db.delete(rule)
+    db.commit()
     return {"deleted": rule_id}
 
 
 @router.patch("/{rule_id}/toggle")
 async def toggle_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     """Flip a rule between enabled and disabled."""
-    result = await db.execute(
-        select(AlertRule).where(AlertRule.id == uuid.UUID(rule_id))
+    result = db.execute(
+        select(AlertRule).where(AlertRule.id == int(rule_id))
     )
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     rule.enabled = not rule.enabled
     rule.updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    db.commit()
     return {"id": rule_id, "enabled": rule.enabled}
 
 class RuleTestRequest(BaseModel):
@@ -242,8 +248,8 @@ async def test_rule(
     from sqlalchemy import func, and_
     from models import Log
 
-    result = await db.execute(
-        select(AlertRule).where(AlertRule.id == uuid.UUID(rule_id))
+    result = db.execute(
+        select(AlertRule).where(AlertRule.id == int(rule_id))
     )
     rule = result.scalar_one_or_none()
     if not rule:
@@ -269,25 +275,28 @@ async def test_rule(
     where = and_(*conditions)
 
     # Get sample matches
-    sample_result = await db.execute(
+    sample_result = db.execute(
         select(Log).where(where).order_by(Log.timestamp.desc()).limit(5)
     )
     samples = sample_result.scalars().all()
 
     # Count total matches
-    count_result = await db.execute(
+    count_result = db.execute(
         select(func.count()).select_from(Log).where(where)
     )
     total = count_result.scalar_one()
 
     # Would it have fired?
-    would_fire = total >= rule.threshold
+    would_fire = total >= rule.threshold_count
 
     return {
         "rule_name": rule.name,
         "would_have_fired": total if would_fire else 0,
         "total_matches": total,
-        "threshold": rule.threshold,
+        "threshold": rule.threshold_count,
         "evaluated_window": f"Last {body.hours_back} hours",
         "sample_matches": [s.to_dict() for s in samples],
     }
+
+
+
