@@ -38,6 +38,9 @@ class Log(Base):
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     source_type = Column(String(50), nullable=False, index=True)
+    level = Column(String(20), nullable=True, index=True)
+    source_host = Column(String(255), nullable=True)
+    ingested_at = Column(DateTime(timezone=True), server_default=func.now())
     source_ip = Column(INET, nullable=True, index=True)
     action = Column(String(255), nullable=True)
     status_code = Column(Integer, nullable=True)
@@ -47,6 +50,22 @@ class Log(Base):
 
     # ── V2 addition ──
     ioc_matched = Column(Boolean, default=False, nullable=False)
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "source_type": self.source_type,
+            "source_ip": str(self.source_ip) if self.source_ip else None,
+            "action": self.action,
+            "status_code": self.status_code,
+            "user": self.user,
+            "message": self.message,
+            "raw": self.raw,
+            "ioc_matched": self.ioc_matched,
+            "level": self.level,
+            "source_host": self.source_host,
+            "ingested_at": self.ingested_at.isoformat() if self.ingested_at else None,
+        }
 
 
 class AlertRule(Base):
@@ -54,10 +73,12 @@ class AlertRule(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
+    condition_type = Column(String(20), nullable=False, default="threshold")
+    group_by = Column(String(50), nullable=True)
     description = Column(Text, nullable=True)
     source_type = Column(String(50), nullable=True)
     condition_field = Column(String(100), nullable=False)
-    condition_operator = Column(String(20), nullable=False)
+    condition_operator = Column(String(20), nullable=True, default="=")
     condition_value = Column(String(255), nullable=False)
     severity = Column(Enum(AlertSeverity), nullable=False)
     time_window_seconds = Column(Integer, default=300)
@@ -66,6 +87,25 @@ class AlertRule(Base):
     enabled = Column(Boolean, default=True)
     mitre_technique_id = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "source_type": self.source_type,
+            "condition_field": self.condition_field,
+            "condition_operator": self.condition_operator,
+            "condition_value": self.condition_value,
+            "severity": self.severity.value if self.severity else None,
+            "time_window_seconds": self.time_window_seconds,
+            "threshold_count": self.threshold_count,
+            "cooldown_seconds": self.cooldown_seconds,
+            "enabled": self.enabled,
+            "mitre_technique_id": self.mitre_technique_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "threshold": self.threshold_count,
+            "window_seconds": self.time_window_seconds,
+        }
 
 
 class Alert(Base):
@@ -83,6 +123,23 @@ class Alert(Base):
     triggered_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "rule_id": self.rule_id,
+            "rule_name": self.rule_name,
+            "severity": self.severity.value if self.severity else None,
+            "status": self.status.value if self.status else None,
+            "source_ip": str(self.source_ip) if self.source_ip else None,
+            "source_type": self.source_type,
+            "description": self.description,
+            "mitre_technique_id": self.mitre_technique_id,
+            "triggered_at": self.triggered_at.isoformat() if self.triggered_at else None,
+            "acknowledged_at": self.acknowledged_at.isoformat() if self.acknowledged_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "notes": self.notes,
+        }
 
 
 # ── V2 New Tables ─────────────────────────────────────────────────────────────
@@ -191,3 +248,27 @@ class CorrelationRule(Base):
     mitre_technique_id = Column(String(20), nullable=True)
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class GeoIPCache(Base):
+    """
+    Caches IP → country/city lookups so we don't hit the GeoLite2
+    database on every single request. Think of it as a phonebook:
+    first time we see an IP we look it up and write it down here;
+    next time, we just read the cached answer.
+
+    Entries expire after 7 days (checked in application code when reading,
+    not enforced by the DB itself).
+
+    Example row:
+      ip           = "8.8.8.8"
+      country_code = "US"
+      country_name = "United States"
+      city         = "Mountain View"
+    """
+    __tablename__ = "geoip_cache"
+
+    ip = Column(INET, primary_key=True)
+    country_code = Column(String(2), nullable=True)
+    country_name = Column(String(100), nullable=True)
+    city = Column(String(100), nullable=True)
+    cached_at = Column(DateTime(timezone=True), server_default=func.now())
