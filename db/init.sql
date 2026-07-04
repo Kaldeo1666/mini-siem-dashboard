@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS logs (
     raw             TEXT,
     ioc_matched     BOOLEAN NOT NULL DEFAULT FALSE
 );
-
+ALTER TABLE logs ADD COLUMN IF NOT EXISTS level VARCHAR(20);
+ALTER TABLE logs ADD COLUMN IF NOT EXISTS source_host VARCHAR(255);
+ALTER TABLE logs ADD COLUMN IF NOT EXISTS ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+CREATE INDEX IF NOT EXISTS idx_logs_timestamp   ON logs (timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp   ON logs (timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_source_ip   ON logs (source_ip);
 CREATE INDEX IF NOT EXISTS idx_logs_source_type ON logs (source_type);
@@ -54,6 +57,14 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS group_by VARCHAR(50);
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS group_by VARCHAR(50);
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE alert_rules ALTER COLUMN condition_operator DROP NOT NULL;
+ALTER TABLE alert_rules ALTER COLUMN condition_operator SET DEFAULT '=';
+
+CREATE TABLE IF NOT EXISTS alerts (
 CREATE TABLE IF NOT EXISTS alerts (
     id                  SERIAL PRIMARY KEY,
     rule_id             INT REFERENCES alert_rules(id) ON DELETE SET NULL,
@@ -122,4 +133,12 @@ CREATE TABLE IF NOT EXISTS correlation_rules (
     mitre_technique_id VARCHAR(20),
     enabled            BOOLEAN NOT NULL DEFAULT TRUE,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS geoip_cache (
+    ip INET PRIMARY KEY,
+    country_code VARCHAR(2),
+    country_name VARCHAR(100),
+    city VARCHAR(100),
+    cached_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

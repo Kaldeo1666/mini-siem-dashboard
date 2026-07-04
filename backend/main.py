@@ -3,13 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import init_db, SessionLocal
-from models import AlertRule, AlertSeverity, CorrelationRule
+from models import AlertRule, AlertSeverity, CorrelationRule, Baseline
 from routers import logs, ingest, rules, alerts
 import routers.ioc as ioc
 import engine
 import baseline_engine
 import anomaly_engine
 import correlation_engine
+from seed_iocs import seed_known_bad_ips
 
 scheduler = BackgroundScheduler()
 
@@ -114,11 +115,20 @@ def seed_correlation_rules():
         db.close()
 
 
+def seed_ioc_list():
+    db = SessionLocal()
+    try:
+        seed_known_bad_ips(db)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     seed_alert_rules()
     seed_correlation_rules()
+    seed_ioc_list()
     scheduler.add_job(engine.evaluate_rules, "interval", seconds=30, id="rule_eval")
     scheduler.add_job(baseline_engine.compute_baselines, "interval", minutes=15, id="baseline_compute")
     scheduler.add_job(anomaly_engine.detect_anomalies, "interval", seconds=30, id="anomaly_detect")
@@ -145,3 +155,54 @@ app.include_router(ingest.router)
 app.include_router(rules.router)
 app.include_router(alerts.router)
 app.include_router(ioc.router)
+
+
+@app.get("/baselines/visualize")
+def visualize_baselines(metric: str = "events_per_minute", source_type: str = "apache"):
+    """
+    Stretch goal: Returns hourly average for a given metric as a
+    24-hour array suitable for rendering a heatmap.
+
+    Example response:
+    {
+      "metric": "events_per_minute",
+      "source_type": "apache",
+      "hours": [
+        {"hour": 0, "avg": 0.0, "stddev": 0.0, "sample_count": 0},
+        {"hour": 1, "avg": 2.3, ...},
+        ...
+      ]
+    }
+    """
+    db = SessionLocal()
+    try:
+        baselines = (
+            db.query(Baseline)
+            .filter(
+                Baseline.metric_name == metric,
+                Baseline.source_type == source_type,
+            )
+            .all()
+        )
+
+        hours_data = {h: {"hour": h, "avg": 0.0, "stddev": 0.0, "sample_count": 0}
+                      for h in range(24)}
+
+        for b in baselines:
+            if b.hour_of_day in hours_data:
+                existing = hours_data[b.hour_of_day]
+                if b.sample_count > existing["sample_count"]:
+                    hours_data[b.hour_of_day] = {
+                        "hour": b.hour_of_day,
+                        "avg": round(b.avg_value, 2),
+                        "stddev": round(b.stddev_value, 2),
+                        "sample_count": b.sample_count,
+                    }
+
+        return {
+            "metric": metric,
+            "source_type": source_type,
+            "hours": list(hours_data.values()),
+        }
+    finally:
+        db.close()

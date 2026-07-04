@@ -39,7 +39,7 @@ async def get_logs(
 
     where = and_(*conditions) if conditions else True
 
-    count_result = await db.execute(
+    count_result = db.execute(
         select(func.count()).select_from(Log).where(where)
     )
     total = count_result.scalar_one()
@@ -57,7 +57,7 @@ async def get_logs(
     order = sort_col.asc() if sort_dir == "asc" else sort_col.desc()
 
     offset = (page - 1) * page_size
-    result = await db.execute(
+    result = db.execute(
         select(Log).where(where).order_by(order).offset(offset).limit(page_size)
     )
     rows = result.scalars().all()
@@ -73,14 +73,14 @@ async def get_logs(
 
 @router.get("/stats")
 async def get_stats(db: AsyncSession = Depends(get_db)):
-    total = (await db.execute(select(func.count()).select_from(Log))).scalar_one()
+    total = (db.execute(select(func.count()).select_from(Log))).scalar_one()
 
-    by_source = await db.execute(
+    by_source = db.execute(
         select(Log.source_type, func.count().label("count"))
         .group_by(Log.source_type)
         .order_by(func.count().desc())
     )
-    by_level = await db.execute(
+    by_level = db.execute(
         select(Log.level, func.count().label("count"))
         .group_by(Log.level)
         .order_by(func.count().desc())
