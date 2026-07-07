@@ -17,8 +17,8 @@ from sqlalchemy.dialects.postgresql import INET as PG_INET
 from database import SessionLocal
 from models import AlertRule, Alert, AlertSeverity, AlertStatus, Log
 
-# WebSocket manager - connected from main.py
-ws_manager = None
+# WebSocket manager - broadcasts fired alerts to connected dashboard clients
+from ws_manager import manager as ws_manager
 
 
 def evaluate_rules():
@@ -133,5 +133,7 @@ def _fire_alert(db, rule: AlertRule, source_ip: str, matched_count: int, now: da
     db.add(alert)
     db.commit()
 
+    ws_manager.broadcast_sync(alert.to_dict())
     print(f"[Engine] Alert fired: '{rule.name}' | {source_ip} | {rule.severity}")
+    return True
 
