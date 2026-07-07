@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import LogTable from './components/LogTable.jsx'
 import AlertsPanel from './components/AlertsPanel.jsx'
 import StatsBar from './components/StatsBar.jsx'
+import EventsChart from './components/EventsChart.jsx'
+import TopIPsTable from './components/TopIPsTable.jsx'
 
 // Base URL for API calls
 // Inside Docker, the Vite proxy rewrites /api → http://api:8000
@@ -93,6 +95,8 @@ export default function App() {
       <main style={styles.main}>
 	<AlertsPanel apiBase={API_BASE} />
         <StatsBar apiBase={API_BASE} />
+        <EventsChart apiBase={API_BASE} />
+        <TopIPsTable apiBase={API_BASE} />
         <LogTable apiBase={API_BASE} />
       </main>
     </div>
