@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
+import asyncio
 from database import init_db, SessionLocal
 from models import AlertRule, AlertSeverity, CorrelationRule, Baseline
-from routers import logs, ingest, rules, alerts
+from routers import logs, ingest, rules, alerts, ws
 import routers.ioc as ioc
+from ws_manager import manager as ws_manager
 import engine
 import baseline_engine
 import anomaly_engine
@@ -126,6 +128,7 @@ def seed_ioc_list():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    ws_manager.set_loop(asyncio.get_running_loop())
     seed_alert_rules()
     seed_correlation_rules()
     seed_ioc_list()
@@ -155,6 +158,7 @@ app.include_router(ingest.router)
 app.include_router(rules.router)
 app.include_router(alerts.router)
 app.include_router(ioc.router)
+app.include_router(ws.router)
 @app.get("/health")
 def health_check():
     """Simple liveness check — used by tests and monitoring."""
