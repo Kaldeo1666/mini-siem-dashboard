@@ -4,6 +4,7 @@ import AlertsPanel from './components/AlertsPanel.jsx'
 import StatsBar from './components/StatsBar.jsx'
 import EventsChart from './components/EventsChart.jsx'
 import TopIPsTable from './components/TopIPsTable.jsx'
+import HuntPage from './components/HuntPage.jsx'
 
 // Base URL for API calls
 // Inside Docker, the Vite proxy rewrites /api → http://api:8000
@@ -54,6 +55,7 @@ const styles = {
 
 export default function App() {
   const [totalLogs, setTotalLogs] = useState(null)
+  const [tab, setTab] = useState('dashboard')
 
   // Refresh total count every 10 seconds (stretch goal badge)
   const fetchTotal = useCallback(async () => {
@@ -84,7 +86,29 @@ export default function App() {
           </svg>
           Mini SIEM
         </div>
-        <span style={{ color: '#8b949e', fontSize: '13px' }}>v0 — Foundation</span>
+        <span style={{ color: '#8b949e', fontSize: '13px' }}>v3 — Live Dashboard & Threat Hunting</span>
+        <div style={{ display: 'flex', gap: '8px', marginLeft: '20px' }}>
+          <button
+            onClick={() => setTab('dashboard')}
+            style={{
+              background: tab === 'dashboard' ? '#1f6feb' : '#21262d',
+              border: `1px solid ${tab === 'dashboard' ? '#58a6ff' : '#30363d'}`,
+              color: tab === 'dashboard' ? '#fff' : '#8b949e',
+              borderRadius: '6px', padding: '5px 14px', fontSize: '13px', cursor: 'pointer',
+            }}>
+            📊 Dashboard
+          </button>
+          <button
+            onClick={() => setTab('hunt')}
+            style={{
+              background: tab === 'hunt' ? '#1f6feb' : '#21262d',
+              border: `1px solid ${tab === 'hunt' ? '#58a6ff' : '#30363d'}`,
+              color: tab === 'hunt' ? '#fff' : '#8b949e',
+              borderRadius: '6px', padding: '5px 14px', fontSize: '13px', cursor: 'pointer',
+            }}>
+            🔎 Threat Hunting
+          </button>
+        </div>
         {totalLogs !== null && (
           <div style={styles.navBadge}>
             {totalLogs.toLocaleString()} logs ingested
@@ -93,11 +117,17 @@ export default function App() {
       </nav>
 
       <main style={styles.main}>
-	<AlertsPanel apiBase={API_BASE} />
-        <StatsBar apiBase={API_BASE} />
-        <EventsChart apiBase={API_BASE} />
-        <TopIPsTable apiBase={API_BASE} />
-        <LogTable apiBase={API_BASE} />
+        {tab === 'dashboard' ? (
+          <>
+            <AlertsPanel apiBase={API_BASE} />
+            <StatsBar apiBase={API_BASE} />
+            <EventsChart apiBase={API_BASE} />
+            <TopIPsTable apiBase={API_BASE} />
+            <LogTable apiBase={API_BASE} />
+          </>
+        ) : (
+          <HuntPage apiBase={API_BASE} />
+        )}
       </main>
     </div>
   )
