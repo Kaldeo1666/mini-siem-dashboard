@@ -170,7 +170,7 @@ export default function AlertsPanel({ apiBase }) {
                     {STATUS_LABELS[alert.status]}
                   </span>
                   {alert.mitre_technique_id && (
-  
+  <a
     href={`https://attack.mitre.org/techniques/${alert.mitre_technique_id}/`}
     target="_blank"
     rel="noreferrer"
