@@ -249,6 +249,30 @@ class CorrelationRule(Base):
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class SavedHunt(Base):
+    """
+    A named, reusable set of hunt filter conditions.
+    Example: name="Failed admin logins", filters_json={
+        "conditions": [{"field": "action", "operator": "contains", "value": "/admin"}],
+        "combinator": "AND"
+    }
+    """
+    __tablename__ = "saved_hunts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    filters_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "filters": self.filters_json,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class GeoIPCache(Base):
     """
     Caches IP → country/city lookups so we don't hit the GeoLite2
