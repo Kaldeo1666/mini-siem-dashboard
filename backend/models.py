@@ -248,6 +248,75 @@ class CorrelationRule(Base):
     mitre_technique_id = Column(String(20), nullable=True)
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+class CaseStatus(str, enum.Enum):
+    OPEN = "OPEN"
+    INVESTIGATING = "INVESTIGATING"
+    CLOSED = "CLOSED"
+
+
+class Case(Base):
+    """
+    Groups related alerts into a single investigation. Analysts work
+    a case from OPEN → INVESTIGATING → CLOSED, attaching alerts and
+    timestamped notes as they dig in.
+    """
+    __tablename__ = "cases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(Enum(CaseStatus), default=CaseStatus.OPEN, nullable=False)
+    severity = Column(Enum(AlertSeverity), nullable=True)
+    assignee = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "status": self.status.value if self.status else None,
+            "severity": self.severity.value if self.severity else None,
+            "assignee": self.assignee,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class CaseAlert(Base):
+    """Join table linking cases to the alerts that belong to them."""
+    __tablename__ = "case_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"), nullable=False)
+    alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("case_id", "alert_id", name="uq_case_alert"),
+    )
+
+
+class CaseNote(Base):
+    """A timestamped investigation note attached to a case."""
+    __tablename__ = "case_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"), nullable=False)
+    note = Column(Text, nullable=False)
+    author = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "case_id": self.case_id,
+            "note": self.note,
+            "author": self.author,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 
 class SavedHunt(Base):
     """
