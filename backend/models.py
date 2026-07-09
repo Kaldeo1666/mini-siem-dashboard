@@ -124,6 +124,13 @@ class Alert(Base):
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
+
+    # V3 Day 6: for correlation alerts, points at the two Log rows that
+    # triggered the multi-stage detection — lets the frontend reconstruct
+    # an accurate attack timeline instead of re-guessing which logs matched.
+    correlation_log_a_id = Column(Integer, ForeignKey("logs.id"), nullable=True)
+    correlation_log_b_id = Column(Integer, ForeignKey("logs.id"), nullable=True)
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -139,6 +146,7 @@ class Alert(Base):
             "acknowledged_at": self.acknowledged_at.isoformat() if self.acknowledged_at else None,
             "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
             "notes": self.notes,
+            "is_correlation": self.correlation_log_a_id is not None,
         }
 
 
