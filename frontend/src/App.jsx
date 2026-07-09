@@ -5,6 +5,7 @@ import StatsBar from './components/StatsBar.jsx'
 import EventsChart from './components/EventsChart.jsx'
 import TopIPsTable from './components/TopIPsTable.jsx'
 import HuntPage from './components/HuntPage.jsx'
+import CasesPage from './components/CasesPage.jsx'
 
 // Base URL for API calls
 // Inside Docker, the Vite proxy rewrites /api → http://api:8000
@@ -108,6 +109,16 @@ export default function App() {
             }}>
             🔎 Threat Hunting
           </button>
+          <button
+            onClick={() => setTab('cases')}
+            style={{
+              background: tab === 'cases' ? '#1f6feb' : '#21262d',
+              border: `1px solid ${tab === 'cases' ? '#58a6ff' : '#30363d'}`,
+              color: tab === 'cases' ? '#fff' : '#8b949e',
+              borderRadius: '6px', padding: '5px 14px', fontSize: '13px', cursor: 'pointer',
+            }}>
+            📁 Cases
+          </button>
         </div>
         {totalLogs !== null && (
           <div style={styles.navBadge}>
@@ -125,8 +136,10 @@ export default function App() {
             <TopIPsTable apiBase={API_BASE} />
             <LogTable apiBase={API_BASE} />
           </>
-        ) : (
+        ) : tab === 'hunt' ? (
           <HuntPage apiBase={API_BASE} />
+        ) : (
+          <CasesPage apiBase={API_BASE} />
         )}
       </main>
     </div>
