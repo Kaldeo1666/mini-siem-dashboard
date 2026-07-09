@@ -101,6 +101,8 @@ def _fire_correlation_alert(db, rule: CorrelationRule, source_ip: str,
             f"within {int(time_diff)}s."
         ),
         mitre_technique_id=rule.mitre_technique_id,
+        correlation_log_a_id=log_a.id,
+        correlation_log_b_id=log_b.id,
     )
     db.add(alert)
     db.commit()
