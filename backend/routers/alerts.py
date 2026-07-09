@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
-from models import Alert
+from models import Alert, Log
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -47,6 +47,36 @@ async def get_alert(alert_id: str, db: AsyncSession = Depends(get_db)):
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     return alert.to_dict()
+@router.get("/{alert_id}/timeline")
+async def get_alert_timeline(alert_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    For a correlation alert, returns the two stage events (log_a, log_b)
+    that triggered it, in order, for rendering as a swimlane timeline.
+    Returns 404 if the alert isn't a correlation alert or the linked
+    logs were deleted (e.g. by log retention).
+    """
+    result = db.execute(select(Alert).where(Alert.id == int(alert_id)))
+    alert = result.scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    if not alert.correlation_log_a_id or not alert.correlation_log_b_id:
+        raise HTTPException(status_code=404, detail="This alert has no timeline data (not a correlation alert)")
+
+    log_a = db.execute(select(Log).where(Log.id == alert.correlation_log_a_id)).scalar_one_or_none()
+    log_b = db.execute(select(Log).where(Log.id == alert.correlation_log_b_id)).scalar_one_or_none()
+
+    if not log_a or not log_b:
+        raise HTTPException(status_code=404, detail="Linked log events no longer exist (may have been retention-deleted)")
+
+    return {
+        "alert": alert.to_dict(),
+        "stages": [
+            {"stage": "A", "log": log_a.to_dict()},
+            {"stage": "B", "log": log_b.to_dict()},
+        ],
+    }
+
 
 @router.patch("/{alert_id}/status")
 async def update_alert_status(alert_id: str, body: StatusUpdate, db: AsyncSession = Depends(get_db)):
