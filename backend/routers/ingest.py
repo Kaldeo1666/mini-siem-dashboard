@@ -286,6 +286,20 @@ BSD_REGEX = re.compile(
     r"(?P<message>.*)"
 )
 
+_IP_IN_MESSAGE_REGEX = re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b")
+
+
+def _extract_ip_from_message(message: str):
+    """
+    Syslog has no structured IP field — the IP (if any) is embedded in
+    free text, e.g. 'ssh_failed login attempt from 203.0.113.51'. This
+    is a best-effort extraction so IP-based correlation/detection rules
+    have something to match against.
+    """
+    match = _IP_IN_MESSAGE_REGEX.search(message)
+    return match.group(1) if match else None
+
+
 SYSLOG_SEVERITY = {
     0: "CRITICAL", 1: "CRITICAL", 2: "CRITICAL",
     3: "ERROR",
@@ -315,7 +329,7 @@ def _parse_syslog_line(line: str):
         return Log(
             timestamp=ts,
             source_type="syslog",
-            source_ip=None,
+            source_ip=_extract_ip_from_message(d["message"]),
             source_host=d["hostname"] if d["hostname"] != "-" else None,
             user=None,
             action=d["appname"] if d["appname"] != "-" else None,
@@ -342,7 +356,7 @@ def _parse_syslog_line(line: str):
         return Log(
             timestamp=ts,
             source_type="syslog",
-            source_ip=None,
+            source_ip=_extract_ip_from_message(d["message"]),
             source_host=d["hostname"] if d["hostname"] != "-" else None,
             user=None,
             action=d["program"],
