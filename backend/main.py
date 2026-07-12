@@ -99,20 +99,40 @@ def seed_correlation_rules():
     db = SessionLocal()
     try:
         if db.query(CorrelationRule).count() == 0:
-            rule = CorrelationRule(
-                name="SSH Brute Force to Web Login Attempt",
-                source_type_a="syslog",
-                condition_a={"action": "ssh_failed"},
-                source_type_b="apache",
-                condition_b={"action": "/login", "status_code": 401},
-                window_seconds=60,
-                severity=AlertSeverity.HIGH,
-                mitre_technique_id="T1110",
-                enabled=True,
-            )
-            db.add(rule)
+            rules_data = [
+                CorrelationRule(
+                    name="SSH Brute Force to Web Login Attempt",
+                    source_type_a="syslog",
+                    condition_a={"action": "ssh_failed"},
+                    source_type_b="apache",
+                    condition_b={"action": "/login", "status_code": 401},
+                    window_seconds=60,
+                    severity=AlertSeverity.HIGH,
+                    mitre_technique_id="T1110",
+                    enabled=True,
+                ),
+                # NOTE: this is a simplified single-event approximation of the
+                # V2 stretch goal ("recon scan → exploitation": >50 404s from
+                # an IP within 60s, then a successful 200 within 120s). The
+                # correlation engine currently matches single events, not
+                # counts, so this rule fires on one 404 followed by one 200
+                # from the same IP. A true threshold-based version would need
+                # engine changes to support a min-count on condition_a.
+                CorrelationRule(
+                    name="Recon Scan to Exploitation Attempt",
+                    source_type_a="apache",
+                    condition_a={"status_code": 404},
+                    source_type_b="apache",
+                    condition_b={"status_code": 200},
+                    window_seconds=120,
+                    severity=AlertSeverity.MEDIUM,
+                    mitre_technique_id="T1595",
+                    enabled=True,
+                ),
+            ]
+            db.add_all(rules_data)
             db.commit()
-            print("Seeded 1 built-in correlation rule")
+            print("Seeded 2 built-in correlation rules")
     finally:
         db.close()
 

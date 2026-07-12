@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import AttackTimeline from './AttackTimeline.jsx'
 
 const SEVERITY_COLORS = {
   CRITICAL: { bg: '#4a0e0e', color: '#ff7b72', border: '#f85149' },
@@ -33,6 +34,7 @@ export default function AlertsPanel({ apiBase }) {
   const [total, setTotal] = useState(0)
   const [filter, setFilter] = useState('NEW')
   const [loading, setLoading] = useState(false)
+  const [timelineAlertId, setTimelineAlertId] = useState(null)
   const wsRef = useRef(null)
 
   const fetchAlerts = async () => {
@@ -208,15 +210,30 @@ export default function AlertsPanel({ apiBase }) {
               </div>
 
               {/* Action button */}
-              {nextStatus && (
-                <button style={s.actionBtn}
-                  onClick={() => transitionStatus(alert.id, nextStatus)}>
-                  → {nextStatus}
-                </button>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {alert.is_correlation && (
+                  <button style={s.actionBtn} onClick={() => setTimelineAlertId(alert.id)}>
+                    ⚔️ Timeline
+                  </button>
+                )}
+                {nextStatus && (
+                  <button style={s.actionBtn}
+                    onClick={() => transitionStatus(alert.id, nextStatus)}>
+                    → {nextStatus}
+                  </button>
+                )}
+              </div>
             </div>
           )
         })
+      )}
+
+      {timelineAlertId && (
+        <AttackTimeline
+          apiBase={apiBase}
+          alertId={timelineAlertId}
+          onClose={() => setTimelineAlertId(null)}
+        />
       )}
     </div>
   )

@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE INDEX IF NOT EXISTS idx_alerts_status     ON alerts (status);
 CREATE INDEX IF NOT EXISTS idx_alerts_triggered  ON alerts (triggered_at DESC);
 
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS correlation_log_a_id INT REFERENCES logs(id);
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS correlation_log_b_id INT REFERENCES logs(id);
+
 -- ============================================================
 -- V2: Anomaly Detection & IOC Tables
 -- ============================================================
