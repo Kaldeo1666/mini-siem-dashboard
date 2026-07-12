@@ -67,7 +67,7 @@ def test_correlation_fires_within_window(db, correlation_rule):
     now = datetime.now(timezone.utc)
 
     # Cleanup
-    db.query(Alert).filter(Alert.rule_name == "Test SSH to Web Login").delete()
+    db.query(Alert).filter(Alert.source_ip == test_ip).delete()
     db.query(Log).filter(Log.source_ip == test_ip).delete()
     db.commit()
 
@@ -112,7 +112,7 @@ def test_correlation_fires_within_window(db, correlation_rule):
     print(f"PASS: Correlation alert fired - {alert.description}")
 
     # Cleanup
-    db.query(Alert).filter(Alert.rule_name == "Test SSH to Web Login").delete()
+    db.query(Alert).filter(Alert.source_ip == test_ip).delete()
     db.query(Log).filter(Log.source_ip == test_ip).delete()
     db.commit()
 
@@ -126,7 +126,7 @@ def test_correlation_no_alert_outside_window(db, correlation_rule):
     now = datetime.now(timezone.utc)
 
     # Cleanup
-    db.query(Alert).filter(Alert.rule_name == "Test SSH to Web Login").delete()
+    db.query(Alert).filter(Alert.source_ip == test_ip).delete()
     db.query(Log).filter(Log.source_ip == test_ip).delete()
     db.commit()
 
