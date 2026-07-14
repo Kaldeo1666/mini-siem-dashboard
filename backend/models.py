@@ -374,6 +374,28 @@ class GeoIPCache(Base):
     city = Column(String(100), nullable=True)
     cached_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class ParseError(Base):
+    """A log line that failed to parse during ingestion. Captured so a
+    misconfigured log shipper can be diagnosed instead of the whole batch
+    silently failing. Table already exists in init.sql from V0 — this adds
+    the missing ORM mapping."""
+    __tablename__ = "parse_errors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    raw_line = Column(Text, nullable=False)
+    endpoint = Column(String(64), nullable=False)
+    error_msg = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "raw_line": self.raw_line,
+            "endpoint": self.endpoint,
+            "error_msg": self.error_msg,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 class Report(Base):
     """A generated incident report. HTML is stored fully rendered so GET /reports/{id} can serve it directly without recomputation."""
     __tablename__ = "reports"

@@ -1,0 +1,29 @@
+============================================================
+  Mini SIEM - 4-Stage Attack Playbook
+  Target: http://localhost:8000
+============================================================
+API reachable: {'status': 'ok'}
+
+[Stage 1] Recon - 50 rapid 404s from 10.99.0.1
+  Sent 50 events -> HTTP 200, ingested=50
+
+[Stage 2] Brute Force - 15 failed logins from 10.99.0.1
+  Sent 15 events -> HTTP 200, ingested=15
+
+[Stage 3] Exploitation - successful /admin/login from 10.99.0.1
+  Sent 1 event -> HTTP 200, ingested=1
+
+[Stage 4] Exfiltration - 100 large successful transfers from 10.99.0.1
+  Sent 100 events -> HTTP 200, ingested=100
+
+Waiting for the rules engine to evaluate (runs every 30s)...
+
+============================================================
+  RESULTS
+============================================================
+  [PASS] Stage 1 (Port Scan) | Port Scan Detection | HIGH
+  [PASS] Stage 2 (Brute Force) | Brute Force Login | HIGH
+  [PASS] Stage 3 (New Admin IP) | Suspicious Admin Access | MEDIUM
+  [PASS] Stage 4 (Exfiltration) | Data Exfiltration Attempt | LOW
+============================================================
+ALL STAGES PASSED

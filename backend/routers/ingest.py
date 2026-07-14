@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Log, IOCEntry, Alert, AlertSeverity, AlertStatus
+from models import Log, IOCEntry, Alert, AlertSeverity, AlertStatus, ParseError
 from geoip.resolver import resolve_ip
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
@@ -100,6 +100,19 @@ def _check_ioc_and_flag(db: Session, logs: list):
             db.add(alert)
             print(f"[IOC] Alert fired for matched IP: {ip_str}")
 
+def _record_parse_errors(db: Session, failed_lines: list, endpoint: str):
+    """Persist lines that failed to parse into parse_errors, so operators
+    can diagnose a misconfigured log shipper instead of silently losing
+    data. Never raises — a logging failure must not break ingestion."""
+    if not failed_lines:
+        return
+    for line in failed_lines:
+        db.add(ParseError(
+            raw_line=line,
+            endpoint=endpoint,
+            error_msg="Line did not match any known format for this endpoint",
+        ))
+    db.commit()
 
 def _bulk_insert(db: Session, logs: list) -> int:
     """Insert logs, run IOC check, resolve GeoIP, commit. Returns count inserted."""
@@ -259,6 +272,7 @@ async def ingest_file(
             failed.append(line)
 
     count = _bulk_insert(db, records)
+    _record_parse_errors(db, failed, "/ingest/file")
     return {"ingested": count, "failed_count": len(failed), "failed": failed}
 
 
@@ -395,6 +409,32 @@ async def ingest_syslog(
             failed.append(line)
 
     count = _bulk_insert(db, records)
+    _record_parse_errors(db, failed, "/ingest/syslog")
     return {"ingested": count, "failed_count": len(failed), "failed": failed}
+
+
+@router.get("/parse-errors")
+async def list_parse_errors(
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Lists recent parse errors so operators can diagnose a misconfigured
+    log shipper — e.g. lines consistently failing from one source."""
+    total = db.query(ParseError).count()
+    offset = (page - 1) * page_size
+    errors = (
+        db.query(ParseError)
+        .order_by(ParseError.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "parse_errors": [e.to_dict() for e in errors],
+    }
 
 
