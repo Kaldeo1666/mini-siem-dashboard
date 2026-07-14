@@ -5,7 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import asyncio
 from database import init_db, SessionLocal
 from models import AlertRule, AlertSeverity, CorrelationRule, Baseline
-from routers import logs, ingest, rules, alerts, ws, hunt, cases
+from routers import logs, ingest, rules, alerts, ws, hunt, cases, reports 
 import routers.ioc as ioc
 from ws_manager import manager as ws_manager
 import engine
@@ -181,6 +181,7 @@ app.include_router(ioc.router)
 app.include_router(ws.router)
 app.include_router(hunt.router)
 app.include_router(cases.router)
+app.include_router(reports.router)
 @app.get("/health")
 def health_check():
     """Simple liveness check — used by tests and monitoring."""
