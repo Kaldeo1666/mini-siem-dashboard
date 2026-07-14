@@ -1,6 +1,63 @@
 # Progress — Mini SIEM Dashboard
 
-### Next: V4 — Hardening, Reports, Performance & API Security (Weeks 9-10)
+## V4 — In Progress (Weeks 9-10, Theme: Hardening, Reports, Performance & API Security)
+
+### Day 2 — Attack playbook script + parse_errors table (2026-07-14)
+- Added `ParseError` ORM model (table already existed in `init.sql` from V0,
+  was just missing its SQLAlchemy mapping) and wired `_record_parse_errors()`
+  into both `/ingest/file` and `/ingest/syslog` — malformed lines are now
+  captured to `parse_errors` instead of just being silently listed in the
+  response and forgotten.
+- Added `GET /ingest/parse-errors` paginated endpoint.
+- Added `./scripts:/app/scripts` volume mount to `docker-compose.yml` —
+  the container had no visibility into the scripts folder at all before
+  this, so `attack_playbook.py` couldn't run inside `siem_api` until fixed.
+- Built `scripts/attack_playbook.py`: 4-stage simulated attack (recon →
+  brute force → exploitation → exfiltration), polls `GET /alerts` and
+  asserts all 4 expected detections fired. All 4 stages PASS against the
+  live stack (`tests/fixtures/playbook_expected_output.txt`).
+- **Known inconsistency found, documented not fixed (out of scope for
+  Day 2):** there are two disconnected sets of "built-in alert rules" in
+  this codebase. `main.py::seed_alert_rules()` (the one actually called at
+  startup) seeds 5 rules including a volumetric "Data Exfiltration Attempt"
+  (100+ status-200 requests/60s from one IP). `routers/rules.py` separately
+  defines a *different* BUILTIN_RULES list — including a content-based
+  "Large Exfiltration" rule matching `bytes_sent` in the message — via
+  `seed_builtin_rules()`, but that function is never called anywhere, so
+  those rules never actually get seeded. Additionally, `engine.py`'s
+  evaluation loop doesn't implement the `pattern_match` condition_type at
+  all, so even if seeded, that rule wouldn't fire as written. The attack
+  playbook's Stage 4 was written to match the volumetric rule that's
+  actually live, not the spec wording's literal "one log with a
+  bytes_sent marker." Worth reconciling into a single source of truth for
+  built-in rules in a later cleanup pass — not blocking V4 Day 2.
+- **Also known (pre-existing, spotted this session):** `test_rules_engine.py
+  ::test_create_rule` still doesn't delete the "Test Rule" it creates
+  (flagged back in V3), and similar leftover rules from `test_update_rule`/
+  `test_toggle_rule` appear to be accumulating and firing real alerts every
+  30s cycle. Not touched this session — flagged again since it's now
+  visibly noisier in the logs.
+
+### Day 1 — Incident report generation (2026-07-14)
+- Added `Report` ORM model (`reports` table: title, start/end range,
+  fully-rendered HTML content, created_at).
+- Built `routers/reports.py`:
+  - `POST /reports/generate` — builds a self-contained HTML report for a
+    given time range: executive summary (total events, total alerts, top
+    5 source IPs, top 5 alert rules fired), a MITRE ATT&CK tactic-by-technique
+    heatmap table (color-coded by fire count), a "Top Anomalies" section
+    (matched by rule-name prefix against the 4 anomaly_engine.py alert
+    types), and a full alert table sorted by severity.
+  - `GET /reports` — list previously generated reports.
+  - `GET /reports/{id}` — serve a stored report as raw HTML.
+- Scoped deliberately as **HTML-only** for Day 1 — PDF export via
+  WeasyPrint needs system libraries (`libpango`, `libcairo`,
+  `libgdk-pixbuf`) not yet present in the backend `Dockerfile` (currently
+  only `gcc` + `libpq-dev`). Adding PDF support is planned as a separate,
+  isolated step in a later day rather than bundling a Dockerfile change
+  into the first report-generation pass.
+- `tests/test_reports.py` (4 tests): report generation, fetch-by-id,
+  invalid date range rejected (400), list endpoint. 45/45 passing.
 
 ## V3 — Complete (2026-07-11)
 
