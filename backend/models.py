@@ -373,3 +373,23 @@ class GeoIPCache(Base):
     country_name = Column(String(100), nullable=True)
     city = Column(String(100), nullable=True)
     cached_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Report(Base):
+    """A generated incident report. HTML is stored fully rendered so GET /reports/{id} can serve it directly without recomputation."""
+    __tablename__ = "reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    start_iso = Column(DateTime(timezone=True), nullable=False)
+    end_iso = Column(DateTime(timezone=True), nullable=False)
+    html_content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "start_iso": self.start_iso.isoformat() if self.start_iso else None,
+            "end_iso": self.end_iso.isoformat() if self.end_iso else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
