@@ -1,11 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 import asyncio
 from database import init_db, SessionLocal
 from models import AlertRule, AlertSeverity, CorrelationRule, Baseline
-from routers import logs, ingest, rules, alerts, ws, hunt, cases, reports 
+from routers import logs, ingest, rules, alerts, ws, hunt, cases, reports
+from auth import router as auth_router, verify_api_key, generate_and_seed_default_key 
 import routers.ioc as ioc
 from ws_manager import manager as ws_manager
 import engine
@@ -145,6 +146,14 @@ def seed_ioc_list():
         db.close()
 
 
+def seed_default_api_key():
+    db = SessionLocal()
+    try:
+        generate_and_seed_default_key(db)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -152,6 +161,7 @@ async def lifespan(app: FastAPI):
     seed_alert_rules()
     seed_correlation_rules()
     seed_ioc_list()
+    seed_default_api_key()
     scheduler.add_job(engine.evaluate_rules, "interval", seconds=30, id="rule_eval")
     scheduler.add_job(baseline_engine.compute_baselines, "interval", minutes=15, id="baseline_compute")
     scheduler.add_job(anomaly_engine.detect_anomalies, "interval", seconds=30, id="anomaly_detect")
@@ -173,15 +183,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(logs.router)
-app.include_router(ingest.router)
-app.include_router(rules.router)
-app.include_router(alerts.router)
-app.include_router(ioc.router)
-app.include_router(ws.router)
-app.include_router(hunt.router)
-app.include_router(cases.router)
-app.include_router(reports.router)
+app.include_router(auth_router)
+app.include_router(logs.router, dependencies=[Depends(verify_api_key)])
+app.include_router(ingest.router, dependencies=[Depends(verify_api_key)])
+app.include_router(rules.router, dependencies=[Depends(verify_api_key)])
+app.include_router(alerts.router, dependencies=[Depends(verify_api_key)])
+app.include_router(ioc.router, dependencies=[Depends(verify_api_key)])
+app.include_router(ws.router)  # exempt: browsers can't set custom headers on a WS handshake
+app.include_router(hunt.router, dependencies=[Depends(verify_api_key)])
+app.include_router(cases.router, dependencies=[Depends(verify_api_key)])
+app.include_router(reports.router, dependencies=[Depends(verify_api_key)])
 @app.get("/health")
 def health_check():
     """Simple liveness check — used by tests and monitoring."""
