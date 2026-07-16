@@ -2,6 +2,50 @@
 
 ## V4 — In Progress (Weeks 9-10, Theme: Hardening, Reports, Performance & API Security)
 
+### Day 4 — API key authentication (2026-07-16)
+- Added `ApiKey` model (`api_keys` table: key_hash, name, created_at,
+  last_used_at, active). Only the SHA-256 hash is stored, never the raw
+  key.
+- Built `backend/auth.py`: `verify_api_key()` dependency checks the
+  `X-API-Key` header against the hashed key table; `POST /auth/keys`
+  and `GET /auth/keys` are separately gated by a master key
+  (`X-Master-Key`, from `MASTER_API_KEY` env var), since those endpoints
+  are what issues the keys `verify_api_key` checks.
+- Wired `Depends(verify_api_key)` onto every router in `main.py` except
+  `/health` (liveness check) and `/ws/alerts` (browsers cannot attach
+  custom headers to a WebSocket handshake — documented as an intentional
+  gap, not a silent oversight; query-param or subprotocol-based WS auth
+  is a follow-up, not implemented today).
+- `docker-compose.yml`: added `DEFAULT_API_KEY` (seeds one usable dev key
+  at startup, for test/local ergonomics only) and `MASTER_API_KEY` env
+  vars to the `api` service; added `VITE_API_KEY` to the `frontend`
+  service.
+- Frontend: wired `X-API-Key` header into `App.jsx`, `AlertsPanel.jsx`,
+  `LogTable.jsx`. **Known gap, not yet fixed:** `EventsChart.jsx`,
+  `TopIPsTable.jsx`, `HuntPage.jsx`, `CasesPage.jsx`, and `StatsBar.jsx`
+  still fetch without the key and will 401 in the browser until patched
+  — this PR is deliberately not merged to `main` yet for that reason.
+- Updated `scripts/attack_playbook.py`, `scripts/generate_logs.py`,
+  `scripts/locustfile.py` to attach the dev API key so they keep working
+  against the now-authenticated API.
+- Updated all 6 existing test fixture files (`test_ingestion.py`,
+  `test_rules_engine.py`, `test_hunt.py`, `test_reports.py`,
+  `test_parse_errors.py`, `test_cases.py`) to attach `X-API-Key`.
+- New `tests/test_auth.py` (12 tests): rejection without key, rejection
+  with invalid key, acceptance with valid key across `/logs`, `/alerts`,
+  `/rules`, and `/ingest/json`; key issuance gated correctly by master
+  key; `/health` confirmed exempt. **60/60 passing** (48 prior + 12 new).
+- **Debugging note (not a code issue, an editing-environment one):** hit
+  repeated indentation/encoding corruption pasting a new ORM class into
+  `models.py` via VS Code — same failure mode as the `Report` class
+  earlier in V4 Day 1. Root-caused to paste/auto-indent interactions
+  rather than anything wrong with the generated code. Resolved by editing
+  the file directly via a Python script (base64-encoded replacement
+  block) run inside the container, sidestepping the editor entirely.
+  Worth switching to file-based edits (write a `.py` script, run it once)
+  instead of inline terminal one-liners or large in-editor pastes for any
+  future multi-line class/block additions.
+
 ### Day 3 — Ingestion performance benchmark (2026-07-16)
 - Built `scripts/locustfile.py`: load-tests `POST /ingest/json` with 50
   concurrent users sending 20-event batches (run from the host, not the
