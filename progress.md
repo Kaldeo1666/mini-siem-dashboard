@@ -2,6 +2,49 @@
 
 ## V4 — In Progress (Weeks 9-10, Theme: Hardening, Reports, Performance & API Security)
 
+### Day 3 — Ingestion performance benchmark (2026-07-16)
+- Built `scripts/locustfile.py`: load-tests `POST /ingest/json` with 50
+  concurrent users sending 20-event batches (run from the host, not the
+  container — locust is a load-testing tool, not a runtime dependency).
+- **Baseline measurement:** 1553 events/sec throughput (exceeds the 1000/s
+  target), but p99 latency was 890ms and p99.9 was 1000ms against a spec
+  target of p99 < 200ms — a 4.5x overshoot. Zero request failures at
+  every stage of this investigation.
+- **First hypothesis (connection pool exhaustion) — tested, ruled out:**
+  `database.py`'s `create_engine()` used SQLAlchemy's default
+  `pool_size=5, max_overflow=10` (15 total connections) against 50
+  concurrent users. Increased to `pool_size=20, max_overflow=30,
+  pool_pre_ping=True` and re-benchmarked. Result: p99 got *worse*
+  (890ms -> 1100ms). This ruled out pool size as the bottleneck rather
+  than confirming it — a genuinely useful negative result, not wasted
+  effort, since it redirected the investigation.
+- **Second hypothesis (event loop blocking) — tested, confirmed:** all
+  three `/ingest/*` routes are declared `async def` but use a
+  *synchronous* SQLAlchemy Session for every DB call. FastAPI runs async
+  handlers on the single event loop thread; a blocking sync DB call
+  inside one freezes request processing for everyone until it returns —
+  explaining why latency climbed steadily with concurrency and then
+  plateaued (single-threaded serialization, not real parallel load).
+  Wrapped the blocking `_bulk_insert()` / `_record_parse_errors()` calls
+  in all three ingest endpoints with `starlette.concurrency.run_in_threadpool`
+  so multiple requests' DB work can actually run in parallel across
+  threads (which also makes the earlier pool-size increase meaningful,
+  now that concurrent threads are really hitting the DB at once).
+- **Result after threadpool fix:** p99 620ms (down from 890ms baseline,
+  1100ms with pool-only change — ~30% improvement over baseline), p99.9
+  700ms (down from 1000ms), max latency 717ms (down from 1104ms),
+  throughput up to ~2085 events/sec (~34% improvement over baseline).
+  Zero failures throughout. Still above the spec's 200ms p99 target, but
+  the remaining latency plateaus around genuine per-request work (GeoIP
+  lookup + IOC check + DB commit) rather than an architectural
+  bottleneck — documented honestly as a partial improvement with real
+  before/after numbers rather than claimed as fully meeting spec.
+- Not pursued further this session (would require moving to
+  `asyncpg`/`AsyncSession` throughout, a larger architectural change
+  out of scope for a one-day fix): batching GeoIP lookups instead of
+  one per unique IP per request, or moving IOC/GeoIP enrichment to a
+  background task instead of inline with the ingest response.
+
 ### Day 2 — Attack playbook script + parse_errors table (2026-07-14)
 - Added `ParseError` ORM model (table already existed in `init.sql` from V0,
   was just missing its SQLAlchemy mapping) and wired `_record_parse_errors()`

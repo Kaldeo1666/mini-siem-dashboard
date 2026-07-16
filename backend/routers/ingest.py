@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Log, IOCEntry, Alert, AlertSeverity, AlertStatus, ParseError
 from geoip.resolver import resolve_ip
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
@@ -192,7 +193,7 @@ async def ingest_json_raw(
             ioc_matched=False,
         ))
 
-    count = _bulk_insert(db, records)
+    count = await run_in_threadpool(_bulk_insert, db, records)
     return {"ingested": count}
 
 
@@ -271,8 +272,8 @@ async def ingest_file(
         else:
             failed.append(line)
 
-    count = _bulk_insert(db, records)
-    _record_parse_errors(db, failed, "/ingest/file")
+    count = await run_in_threadpool(_bulk_insert, db, records)
+    await run_in_threadpool(_record_parse_errors, db, failed, "/ingest/file")
     return {"ingested": count, "failed_count": len(failed), "failed": failed}
 
 
@@ -408,8 +409,8 @@ async def ingest_syslog(
         else:
             failed.append(line)
 
-    count = _bulk_insert(db, records)
-    _record_parse_errors(db, failed, "/ingest/syslog")
+    count = await run_in_threadpool(_bulk_insert, db, records)
+    await run_in_threadpool(_record_parse_errors, db, failed, "/ingest/syslog")
     return {"ingested": count, "failed_count": len(failed), "failed": failed}
 
 

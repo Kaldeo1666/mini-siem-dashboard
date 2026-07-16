@@ -11,7 +11,12 @@ DATABASE_URL = os.getenv(
     "postgresql://siem:siem_password@db:5432/siem_db"
 )
 
-engine = create_engine(DATABASE_URL)
+# Default pool_size=5/max_overflow=10 (15 total connections) was
+# saturating under concurrent load during the V4 Day 3 benchmark —
+# median latency climbed from ~210ms to ~570ms and p99 hit 890ms
+# (spec target: p99 < 200ms) as requests queued for a free connection.
+# Sized up based on that measurement, not guessed in advance.
+engine = create_engine(DATABASE_URL, pool_size=20, max_overflow=30, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
