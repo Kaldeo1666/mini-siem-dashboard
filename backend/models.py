@@ -415,3 +415,24 @@ class Report(Base):
             "end_iso": self.end_iso.isoformat() if self.end_iso else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+    
+
+class ApiKey(Base):
+    """An issued API key. Only the SHA-256 hash is stored - the raw key is shown exactly once, at creation time, and never again."""
+    __tablename__ = 'api_keys'
+
+    id = Column(Integer, primary_key=True, index=True)
+    key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    active = Column(Boolean, default=True, nullable=False)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            'active': self.active,
+        }

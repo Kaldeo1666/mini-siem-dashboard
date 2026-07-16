@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import AttackTimeline from './AttackTimeline.jsx'
+import { API_HEADERS } from '../App.jsx'
 
 const SEVERITY_COLORS = {
   CRITICAL: { bg: '#4a0e0e', color: '#ff7b72', border: '#f85149' },
@@ -42,7 +43,7 @@ export default function AlertsPanel({ apiBase }) {
     try {
       const params = new URLSearchParams({ page_size: 50 })
       if (filter !== 'ALL') params.set('status', filter)
-      const res = await fetch(`${apiBase}/alerts?${params}`)
+      const res = await fetch(`${apiBase}/alerts?${params}`, { headers: API_HEADERS })
       const data = await res.json()
       setAlerts(data.alerts || [])
       setTotal(data.total || 0)
@@ -86,7 +87,7 @@ export default function AlertsPanel({ apiBase }) {
     try {
       await fetch(`${apiBase}/alerts/${alertId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...API_HEADERS },
         body: JSON.stringify({ status: newStatus }),
       })
       fetchAlerts()

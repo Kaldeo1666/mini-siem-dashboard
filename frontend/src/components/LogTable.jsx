@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { API_HEADERS } from '../App.jsx'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -180,7 +181,7 @@ export default function LogTable({ apiBase }) {
       const tf = getTimeFrom()
       if (tf) params.set('time_from', tf)
 
-      const res = await fetch(`${apiBase}/logs?${params}`)
+      const res = await fetch(`${apiBase}/logs?${params}`, { headers: API_HEADERS })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setLogs(data.logs)

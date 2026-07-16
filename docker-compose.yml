@@ -28,6 +28,8 @@ services:
     environment:
       DATABASE_URL: postgresql://siem:siem_password@db:5432/siem_db
       PYTHONUNBUFFERED: "1"
+      DEFAULT_API_KEY: dev-local-siem-key-2026
+      MASTER_API_KEY: master-key-change-in-prod
     depends_on:
       db:
         condition: service_healthy
@@ -45,6 +47,7 @@ services:
       - "3000:3000"
     environment:
       VITE_API_URL: http://localhost:8000
+      VITE_API_KEY: dev-local-siem-key-2026
     depends_on:
       - api
     volumes:

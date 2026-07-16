@@ -20,9 +20,11 @@ from datetime import datetime, timezone
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 # Use a synchronous HTTPX client (simpler for tests; no async fixtures needed)
+API_KEY = os.getenv("DEFAULT_API_KEY", "dev-local-siem-key-2026")
+
 @pytest.fixture(scope="module")
 def client():
-    with httpx.Client(base_url=API_URL, timeout=10.0) as c:
+    with httpx.Client(base_url=API_URL, timeout=10.0, headers={"X-API-Key": API_KEY}) as c:
         yield c
 
 

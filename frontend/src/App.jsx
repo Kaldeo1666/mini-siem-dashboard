@@ -11,8 +11,10 @@ import CasesPage from './components/CasesPage.jsx'
 // Inside Docker, the Vite proxy rewrites /api → http://api:8000
 // Outside Docker (local dev), VITE_API_URL is http://localhost:8000
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
+const API_KEY = import.meta.env.VITE_API_KEY || ''
+const API_HEADERS = { 'X-API-Key': API_KEY }
 
-export { API_BASE }
+export { API_BASE, API_KEY, API_HEADERS }
 
 const styles = {
   app: {
@@ -61,7 +63,7 @@ export default function App() {
   // Refresh total count every 10 seconds (stretch goal badge)
   const fetchTotal = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/logs/stats`)
+      const res = await fetch(`${API_BASE}/logs/stats`, { headers: API_HEADERS })
       if (res.ok) {
         const data = await res.json()
         setTotalLogs(data.total)
