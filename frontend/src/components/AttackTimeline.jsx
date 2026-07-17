@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_HEADERS } from '../App.jsx'
 
 export default function AttackTimeline({ apiBase, alertId, onClose }) {
   const [data, setData] = useState(null)
@@ -8,7 +9,7 @@ export default function AttackTimeline({ apiBase, alertId, onClose }) {
   useEffect(() => {
     const fetchTimeline = async () => {
       try {
-        const res = await fetch(`${apiBase}/alerts/${alertId}/timeline`)
+        const res = await fetch(`${apiBase}/alerts/${alertId}/timeline`, { headers: API_HEADERS })
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body.detail || `HTTP ${res.status}`)

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_HEADERS } from '../App.jsx'
 
 const STATUS_COLORS = {
   OPEN:           { bg: '#3d1c1c', color: '#f85149' },
@@ -24,7 +25,7 @@ export default function CasesPage({ apiBase }) {
 
   const fetchCases = async () => {
     try {
-      const res = await fetch(`${apiBase}/cases`)
+      const res = await fetch(`${apiBase}/cases`, { headers: API_HEADERS })
       if (res.ok) setCases((await res.json()).cases)
     } catch (e) { console.error(e) }
   }
@@ -33,7 +34,7 @@ export default function CasesPage({ apiBase }) {
 
   const openCase = async (id) => {
     try {
-      const res = await fetch(`${apiBase}/cases/${id}`)
+      const res = await fetch(`${apiBase}/cases/${id}`, { headers: API_HEADERS })
       if (res.ok) setSelectedCase(await res.json())
     } catch (e) { console.error(e) }
   }
@@ -42,7 +43,7 @@ export default function CasesPage({ apiBase }) {
     if (!newTitle.trim()) return
     const res = await fetch(`${apiBase}/cases`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...API_HEADERS },
       body: JSON.stringify({ title: newTitle, description: newDesc || null }),
     })
     if (res.ok) {
@@ -56,7 +57,7 @@ export default function CasesPage({ apiBase }) {
     if (!selectedCase) return
     const res = await fetch(`${apiBase}/cases/${selectedCase.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...API_HEADERS },
       body: JSON.stringify({ status: newStatus }),
     })
     if (res.ok) {
@@ -69,7 +70,7 @@ export default function CasesPage({ apiBase }) {
     if (!selectedCase || !noteText.trim()) return
     const res = await fetch(`${apiBase}/cases/${selectedCase.id}/notes`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...API_HEADERS },
       body: JSON.stringify({ note: noteText, author: noteAuthor || null }),
     })
     if (res.ok) {
@@ -83,7 +84,7 @@ export default function CasesPage({ apiBase }) {
     setError(null)
     const res = await fetch(`${apiBase}/cases/${selectedCase.id}/alerts`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...API_HEADERS },
       body: JSON.stringify({ alert_id: Number(alertIdToAdd) }),
     })
     if (res.ok) {

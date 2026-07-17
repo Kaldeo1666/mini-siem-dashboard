@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_HEADERS } from '../App.jsx'
 
 const FIELDS = ['source_ip', 'source_type', 'level', 'status_code', 'action', 'message', 'source_host', 'user']
 const OPERATORS = ['=', '!=', 'contains', '>', '<', 'regex']
@@ -15,7 +16,7 @@ export default function HuntPage({ apiBase }) {
 
   const fetchSavedHunts = async () => {
     try {
-      const res = await fetch(`${apiBase}/hunts`)
+      const res = await fetch(`${apiBase}/hunts`, { headers: API_HEADERS })
       if (res.ok) setSavedHunts((await res.json()).hunts)
     } catch (e) { console.error(e) }
   }
@@ -33,7 +34,7 @@ export default function HuntPage({ apiBase }) {
     try {
       const res = await fetch(`${apiBase}/hunt/preview`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...API_HEADERS },
         body: JSON.stringify({ conditions, combinator, page: 1, page_size: 50 }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -51,7 +52,7 @@ export default function HuntPage({ apiBase }) {
     if (!huntName.trim()) return
     await fetch(`${apiBase}/hunts`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...API_HEADERS },
       body: JSON.stringify({ name: huntName, filters: { conditions, combinator, page: 1, page_size: 50 } }),
     })
     setHuntName('')
@@ -64,12 +65,12 @@ export default function HuntPage({ apiBase }) {
   }
 
   const deleteHunt = async (id) => {
-    await fetch(`${apiBase}/hunts/${id}`, { method: 'DELETE' })
+    await fetch(`${apiBase}/hunts/${id}`, { method: 'DELETE', headers: API_HEADERS })
     fetchSavedHunts()
   }
 
   const createRule = async (id) => {
-    const res = await fetch(`${apiBase}/hunts/${id}/create-rule`, { method: 'POST' })
+    const res = await fetch(`${apiBase}/hunts/${id}/create-rule`, { method: 'POST', headers: API_HEADERS })
     if (res.ok) {
       const rule = await res.json()
       alert(`Rule created: "${rule.name}" (id ${rule.id}). Adjust threshold/window in the Rules page if needed.`)

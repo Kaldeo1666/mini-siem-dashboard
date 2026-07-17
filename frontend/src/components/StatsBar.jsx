@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_HEADERS } from '../App.jsx'
 
 const LEVEL_COLORS = {
   DEBUG:    { bg: '#21262d', text: '#8b949e', border: '#30363d' },
@@ -23,7 +24,7 @@ export default function StatsBar({ apiBase }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${apiBase}/logs/stats`)
+        const res = await fetch(`${apiBase}/logs/stats`, { headers: API_HEADERS })
         if (res.ok) setStats(await res.json())
       } catch {}
     }
