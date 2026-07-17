@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import { API_HEADERS } from '../App.jsx'
 
 const SOURCE_COLORS = {
   apache:        '#58a6ff',
@@ -25,7 +26,7 @@ export default function EventsChart({ apiBase }) {
 
   const fetchData = async () => {
     try {
-      const res = await fetch(`${apiBase}/logs/events-per-minute?minutes=60`)
+      const res = await fetch(`${apiBase}/logs/events-per-minute?minutes=60`, { headers: API_HEADERS })
       if (!res.ok) return
       const { data } = await res.json()
 

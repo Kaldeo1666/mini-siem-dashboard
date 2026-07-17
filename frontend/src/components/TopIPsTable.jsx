@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_HEADERS } from '../App.jsx'
 
 function flagEmoji(countryCode) {
   if (!countryCode || countryCode.length !== 2) return '🏳️'
@@ -12,7 +13,7 @@ export default function TopIPsTable({ apiBase }) {
 
   const fetchData = async () => {
     try {
-      const res = await fetch(`${apiBase}/logs/top-ips?hours=1&limit=10`)
+      const res = await fetch(`${apiBase}/logs/top-ips?hours=1&limit=10`, { headers: API_HEADERS })
       if (!res.ok) return
       const { top_ips } = await res.json()
       setTopIps(top_ips)
