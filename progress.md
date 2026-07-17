@@ -2,6 +2,35 @@
 
 ## V4 — In Progress (Weeks 9-10, Theme: Hardening, Reports, Performance & API Security)
 
+### Day 5 — Log retention policy (2026-07-17)
+- Built `backend/retention.py`: `run_retention_job()` deletes `logs` rows
+  older than `LOG_RETENTION_DAYS` (default 30, env-configurable);
+  setting `LOG_RETENTION_DAYS=0` disables retention entirely (job
+  becomes a no-op rather than being unscheduled, so status reporting
+  stays consistent either way).
+- Registered `retention_job` on the existing APScheduler instance,
+  running once daily alongside the rule/anomaly/correlation/baseline
+  jobs already running every 30s-15min.
+- New `GET /admin/retention-status` endpoint (auth-protected like every
+  other endpoint since Day 4): reports whether retention is enabled,
+  the configured window, the next scheduled run time (read directly
+  from the live APScheduler job), and the result of the last run
+  (record count deleted, or an error message).
+- **Design choice, stated explicitly:** last-run status is kept in
+  memory only, not persisted to a DB table. The spec asks the status
+  endpoint to report the last run's result, not to survive a restart —
+  keeping this in-memory avoids an unnecessary migration for a feature
+  that doesn't need durability. Would need a small `retention_runs`
+  table if cross-restart history becomes a real requirement later.
+- `docker-compose.yml`: added `LOG_RETENTION_DAYS` env var to the `api`
+  service (default `"30"`).
+- New `tests/test_retention.py` (3 tests): seeds 200 log records 40 days
+  old plus 5 recent records, triggers the retention job directly
+  (deterministic, not waiting on the real daily interval), asserts all
+  200 old records are deleted and the 5 recent ones are untouched;
+  confirms the status endpoint requires auth and reports the correct
+  policy shape. **63/63 passing** (60 prior + 3 new).
+
 ### Day 4 — API key authentication (2026-07-16)
 - Added `ApiKey` model (`api_keys` table: key_hash, name, created_at,
   last_used_at, active). Only the SHA-256 hash is stored, never the raw

@@ -6,7 +6,8 @@ import asyncio
 from database import init_db, SessionLocal
 from models import AlertRule, AlertSeverity, CorrelationRule, Baseline
 from routers import logs, ingest, rules, alerts, ws, hunt, cases, reports
-from auth import router as auth_router, verify_api_key, generate_and_seed_default_key 
+from auth import router as auth_router, verify_api_key, generate_and_seed_default_key
+import retention 
 import routers.ioc as ioc
 from ws_manager import manager as ws_manager
 import engine
@@ -166,6 +167,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(baseline_engine.compute_baselines, "interval", minutes=15, id="baseline_compute")
     scheduler.add_job(anomaly_engine.detect_anomalies, "interval", seconds=30, id="anomaly_detect")
     scheduler.add_job(correlation_engine.run_correlation, "interval", seconds=30, id="correlation_run")
+    scheduler.add_job(retention.run_retention_job, "interval", days=1, id="retention_job")
     scheduler.start()
     print("Scheduler started")
     yield
@@ -197,6 +199,15 @@ app.include_router(reports.router, dependencies=[Depends(verify_api_key)])
 def health_check():
     """Simple liveness check — used by tests and monitoring."""
     return {"status": "ok"}
+
+
+@app.get("/admin/retention-status", dependencies=[Depends(verify_api_key)])
+def retention_status():
+    """
+    Shows the current log retention policy, the next scheduled run,
+    and the result of the last run (record count deleted, or an error).
+    """
+    return retention.get_retention_status(scheduler)
 
 
 @app.get("/baselines/visualize")
