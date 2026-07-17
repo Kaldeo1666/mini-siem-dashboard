@@ -30,6 +30,7 @@ services:
       PYTHONUNBUFFERED: "1"
       DEFAULT_API_KEY: dev-local-siem-key-2026
       MASTER_API_KEY: master-key-change-in-prod
+      LOG_RETENTION_DAYS: "30"
     depends_on:
       db:
         condition: service_healthy
