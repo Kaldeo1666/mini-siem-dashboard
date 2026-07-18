@@ -144,4 +144,12 @@ class TestSavedHunts:
         assert rule["name"] == f"From Hunt: {hunt_name}"
         assert rule["condition_field"] == "status_code"
 
+        # Cleanup: creating the rule via /create-rule leaves a live,
+        # always-enabled AlertRule behind (matching status_code=401
+        # globally, no scoping), which fires every 30s evaluation cycle
+        # forever if not deleted. Deleting the hunt alone (below) does
+        # NOT delete this rule -- they are separate resources. Confirmed
+        # via a real incident (11 stray hunt-generated rules, one firing
+        # 800-1400+ times per 5-minute window, before this fix).
+        client.delete(f"/rules/{rule['id']}")
         client.delete(f"/hunts/{hunt_id}")

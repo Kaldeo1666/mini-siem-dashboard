@@ -2,6 +2,56 @@
 
 ## V4 — In Progress (Weeks 9-10, Theme: Hardening, Reports, Performance & API Security)
 
+### Day 6 — Virtual scrolling + test-pollution incident (2026-07-18)
+- Added `react-window` and rewrote `LogTable.jsx` to use `FixedSizeList`
+  for continuous virtual scroll, replacing the old page-number pagination
+  per the spec. Fetches a 2000-row working set per query; react-window
+  only ever renders the ~15-20 rows actually visible in the viewport,
+  so the DOM cost stays flat regardless of dataset size.
+- **Bug found immediately on manual verification:** the frontend fetch
+  requested `page_size=2000`, but `routers/logs.py`'s `Query(50, ge=1,
+  le=100)` capped it at 100, causing every request to fail with HTTP 422
+  and the log table to render empty. Raised the backend cap to 10000 to
+  match the actual purpose of virtual scrolling (spec explicitly targets
+  10,000+ row datasets) rather than silently capping the frontend to 100
+  rows, which would have defeated the point of the feature.
+- Manually verified in-browser: 308,910 total logs, smooth scroll
+  performance, filters/sort/search all functioning against the
+  virtualized list.
+- **Major incident found and resolved during verification: runaway test
+  data pollution.** The dashboard showed 23,129 alerts, nearly all a
+  single LOW-severity "Test Rule" firing every 30s evaluation cycle.
+  Root-caused to `tests/test_rules_engine.py::test_create_rule`, which
+  creates a broadly-matching, always-enabled rule
+  (`status_code=500, threshold=1`) and never deletes it — flagged as
+  known debt back in V3, never actually fixed until now. Investigation
+  also turned up two related, previously-unflagged instances of the same
+  bug class:
+  - `test_update_rule` and `test_toggle_rule` in the same file also
+    created rules with no cleanup (lower-severity leftovers -- one was
+    at least left disabled by its own test, but neither was deleted).
+  - `test_hunt.py::test_create_rule_from_hunt` promotes a hunt into a
+    real `AlertRule` via `/hunts/{id}/create-rule`, then only deleted
+    the *hunt*, not the *rule* the hunt generated -- these are separate
+    resources. This was the more severe leak: 11 stale rules found, one
+    firing 800-1400+ times per 5-minute window.
+  - A `test_cases.py` fixture had also left 12 orphaned alerts behind
+    from interrupted prior test runs (not a logic bug -- runs that
+    didn't reach teardown, e.g. from the many debugging restarts earlier
+    this V4).
+  - Total cleaned from the database: 66 stale rules, ~23,006 stale
+    alerts, 11 stale hunt-generated rules, 112 more stale alerts, plus
+    12 orphaned case-test alerts and their `case_alerts` join rows
+    (required deleting `case_alerts` before `alerts` in every pass, same
+    FK-ordering lesson learned repeatedly throughout this project).
+  - Fixed all four test methods to delete what they create. Re-ran the
+    full suite twice after the fix and confirmed zero residual rows in
+    `alert_rules` matching test-origin naming patterns -- the pollution
+    is now structurally prevented, not just cleaned up once.
+- **63/63 tests passing**, 0 warnings (the long-standing
+  `PytestReturnNotNoneWarning` on `test_create_rule` also disappeared as
+  a side effect of removing its stray `return` statement during the fix).
+
 ### Day 5 — Log retention policy (2026-07-17)
 - Built `backend/retention.py`: `run_retention_job()` deletes `logs` rows
   older than `LOG_RETENTION_DAYS` (default 30, env-configurable);

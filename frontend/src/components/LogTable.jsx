@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { FixedSizeList } from 'react-window'
 import { API_HEADERS } from '../App.jsx'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -13,7 +14,15 @@ const LEVEL_BADGE = {
 
 const SOURCE_TYPES = ['apache', 'nginx', 'syslog', 'json', 'firewall', 'windows_event']
 const LEVELS       = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL']
-const PAGE_SIZES   = [25, 50, 100]
+
+// Virtualized fetch window: how many rows we pull in one request and
+// keep in memory for the virtual list to scroll through. 2000 rows at
+// ~1KB each is a small, fast payload, and react-window only ever
+// renders the ~15-20 rows actually visible in the viewport regardless
+// of how large this working set is -- this is what makes 10,000+ row
+// datasets scroll smoothly instead of choking the DOM.
+const FETCH_LIMIT = 2000
+const ROW_HEIGHT = 36
 
 const TIME_PRESETS = [
   { label: 'Last 1h',  hours: 1  },
@@ -80,33 +89,22 @@ const s = {
     borderRadius: '6px', padding: '6px 12px', fontSize: '12px',
     cursor: 'pointer', fontWeight: active ? 600 : 400,
   }),
-  table: {
-    width: '100%', borderCollapse: 'collapse', fontSize: '12.5px',
+  headerRow: {
+    display: 'flex', background: '#0d1117', borderBottom: '1px solid #30363d',
   },
   th: {
-    background: '#0d1117', color: '#8b949e', fontWeight: 600,
-    padding: '10px 12px', textAlign: 'left', borderBottom: '1px solid #30363d',
+    color: '#8b949e', fontWeight: 600, fontSize: '12.5px',
+    padding: '10px 12px', textAlign: 'left',
     cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+    overflow: 'hidden', textOverflow: 'ellipsis',
+  },
+  row: {
+    display: 'flex', alignItems: 'center', borderBottom: '1px solid #21262d',
   },
   td: {
-    padding: '9px 12px', borderBottom: '1px solid #21262d',
-    verticalAlign: 'top', color: '#c9d1d9',
+    padding: '0 12px', color: '#c9d1d9', fontSize: '12.5px',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
-  trHover: {
-    background: '#1c2128',
-  },
-  pagination: {
-    padding: '12px 16px', display: 'flex', alignItems: 'center',
-    gap: '8px', borderTop: '1px solid #30363d', flexWrap: 'wrap',
-  },
-  pageBtn: (active, disabled) => ({
-    background: active ? '#1f6feb' : '#21262d',
-    border: `1px solid ${active ? '#58a6ff' : '#30363d'}`,
-    color: disabled ? '#484f58' : (active ? '#fff' : '#c9d1d9'),
-    borderRadius: '6px', padding: '5px 11px', fontSize: '12px',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontWeight: active ? 600 : 400,
-  }),
   emptyRow: {
     textAlign: 'center', padding: '40px', color: '#484f58', fontSize: '14px',
   },
@@ -117,7 +115,7 @@ const s = {
   },
 }
 
-// ── Columns ────────────────────────────────────────────────────────────────
+// ── Columns (with fixed flex-basis widths for virtual row alignment) ───────
 
 const COLUMNS = [
   { key: 'timestamp',   label: 'Timestamp',    sortable: true,  width: '160px' },
@@ -135,14 +133,9 @@ const COLUMNS = [
 export default function LogTable({ apiBase }) {
   const [logs, setLogs]           = useState([])
   const [total, setTotal]         = useState(0)
-  const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState(null)
   const [hoveredRow, setHoveredRow] = useState(null)
-
-  // Pagination
-  const [page, setPage]           = useState(1)
-  const [pageSize, setPageSize]   = useState(50)
 
   // Sorting
   const [sortBy, setSortBy]       = useState('timestamp')
@@ -155,6 +148,8 @@ export default function LogTable({ apiBase }) {
   const [searchInput, setSearchInput] = useState('') // debounced
   const [timePreset, setTimePreset]   = useState(3)  // index into TIME_PRESETS; 3 = All
 
+  const listRef = useRef(null)
+
   // Compute time_from from preset
   const getTimeFrom = () => {
     const preset = TIME_PRESETS[timePreset]
@@ -164,14 +159,15 @@ export default function LogTable({ apiBase }) {
     return d.toISOString()
   }
 
-  // Fetch logs
+  // Fetch logs -- pulls FETCH_LIMIT rows in one go for the virtual list
+  // to scroll through, instead of paginating page-by-page.
   const fetchLogs = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({
-        page: String(page),
-        page_size: String(pageSize),
+        page: '1',
+        page_size: String(FETCH_LIMIT),
         sort_by: sortBy,
         sort_dir: sortDir,
       })
@@ -186,13 +182,12 @@ export default function LogTable({ apiBase }) {
       const data = await res.json()
       setLogs(data.logs)
       setTotal(data.total)
-      setTotalPages(data.total_pages)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [apiBase, page, pageSize, sortBy, sortDir, sourceType, level, search, timePreset])
+  }, [apiBase, sortBy, sortDir, sourceType, level, search, timePreset])
 
   // Debounce search input
   useEffect(() => {
@@ -200,8 +195,10 @@ export default function LogTable({ apiBase }) {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [sourceType, level, search, timePreset, pageSize])
+  // Reset scroll to top when filters/sort change
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTo(0)
+  }, [sourceType, level, search, timePreset, sortBy, sortDir])
 
   // Fetch when dependencies change
   useEffect(() => { fetchLogs() }, [fetchLogs])
@@ -221,16 +218,44 @@ export default function LogTable({ apiBase }) {
       setSortBy(col)
       setSortDir('desc')
     }
-    setPage(1)
   }
 
-  // Pagination helpers
-  const pageNumbers = () => {
-    const pages = []
-    const start = Math.max(1, page - 2)
-    const end   = Math.min(totalPages, page + 2)
-    for (let i = start; i <= end; i++) pages.push(i)
-    return pages
+  // ── Virtual row renderer ──
+  const Row = ({ index, style }) => {
+    const log = logs[index]
+    if (!log) return null
+    return (
+      <div
+        style={{ ...style, ...s.row, background: hoveredRow === log.id ? '#1c2128' : 'transparent' }}
+        onMouseEnter={() => setHoveredRow(log.id)}
+        onMouseLeave={() => setHoveredRow(null)}
+      >
+        <div style={{ ...s.td, flex: `0 0 160px`, fontFamily: 'monospace' }}>{fmtTs(log.timestamp)}</div>
+        <div style={{ ...s.td, flex: `0 0 80px` }}><LevelBadge level={log.level} /></div>
+        <div style={{ ...s.td, flex: `0 0 90px`, color: '#8b949e', fontFamily: 'monospace' }}>{log.source_type}</div>
+        <div style={{ ...s.td, flex: `0 0 120px`, fontFamily: 'monospace' }}>{log.source_host || '—'}</div>
+        <div style={{ ...s.td, flex: `0 0 120px`, fontFamily: 'monospace', color: '#79c0ff' }}>{log.source_ip || '—'}</div>
+        <div style={{ ...s.td, flex: `0 0 180px`, fontFamily: 'monospace' }}>{log.action || '—'}</div>
+        <div style={{ ...s.td, flex: `0 0 70px`, textAlign: 'center' }}>
+          {log.status_code ? (
+            <span style={{
+              color: log.status_code >= 500 ? '#f85149'
+                   : log.status_code >= 400 ? '#e3b341'
+                   : '#3fb950',
+              fontWeight: 600, fontFamily: 'monospace',
+            }}>
+              {log.status_code}
+            </span>
+          ) : '—'}
+        </div>
+        <div style={{ ...s.td, flex: '1 1 auto', color: '#8b949e' }}>
+          {log.ioc_matched && (
+            <span style={{ color: '#f85149', marginRight: '6px' }} title="IOC Match">🚨</span>
+          )}
+          {log.message || '—'}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -273,17 +298,9 @@ export default function LogTable({ apiBase }) {
           onChange={e => setSearchInput(e.target.value)}
         />
 
-        {/* Rows per page */}
-        <select style={s.select} value={pageSize}
-          onChange={e => setPageSize(Number(e.target.value))}>
-          {PAGE_SIZES.map(n => (
-            <option key={n} value={n}>{n} / page</option>
-          ))}
-        </select>
-
         {/* Result count + refresh */}
         <span style={{ color: '#8b949e', fontSize: '12px' }}>
-          {loading ? 'Loading…' : `${total.toLocaleString()} results`}
+          {loading ? 'Loading…' : `${total.toLocaleString()} total · showing up to ${FETCH_LIMIT.toLocaleString()} (virtual scroll)`}
         </span>
         <button style={s.refreshBtn} onClick={fetchLogs} title="Refresh now">
           ↻ Refresh
@@ -300,106 +317,38 @@ export default function LogTable({ apiBase }) {
         </div>
       )}
 
-      {/* ── Table ── */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={s.table}>
-          <thead>
-            <tr>
-              {COLUMNS.map(col => (
-                <th key={col.key} style={{ ...s.th, width: col.width }}
-                  onClick={() => handleSort(col.key)}>
-                  {col.label}
-                  {col.sortable && (
-                    <SortIcon col={col.key} sortBy={sortBy} sortDir={sortDir} />
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {logs.length === 0 ? (
-              <tr>
-                <td colSpan={COLUMNS.length} style={s.emptyRow}>
-                  {loading
-                    ? '⏳ Loading logs…'
-                    : '📭 No logs found. Run the generator script or ingest some logs.'}
-                </td>
-              </tr>
-            ) : (
-              logs.map(log => (
-                <tr key={log.id}
-                  onMouseEnter={() => setHoveredRow(log.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                  style={hoveredRow === log.id ? s.trHover : {}}>
-
-                  <td style={{ ...s.td, fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                    {fmtTs(log.timestamp)}
-                  </td>
-                  <td style={s.td}>
-                    <LevelBadge level={log.level} />
-                  </td>
-                  <td style={{ ...s.td, color: '#8b949e', fontFamily: 'monospace' }}>
-                    {log.source_type}
-                  </td>
-                  <td style={{ ...s.td, fontFamily: 'monospace', fontSize: '12px' }}>
-                    {log.source_host || '—'}
-                  </td>
-                  <td style={{ ...s.td, fontFamily: 'monospace', fontSize: '12px', color: '#79c0ff' }}>
-                    {log.source_ip || '—'}
-                  </td>
-                  <td style={{ ...s.td, fontFamily: 'monospace', fontSize: '12px', maxWidth: '200px',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {log.action || '—'}
-                  </td>
-                  <td style={{ ...s.td, textAlign: 'center' }}>
-                    {log.status_code ? (
-                      <span style={{
-                        color: log.status_code >= 500 ? '#f85149'
-                             : log.status_code >= 400 ? '#e3b341'
-                             : '#3fb950',
-                        fontWeight: 600, fontFamily: 'monospace',
-                      }}>
-                        {log.status_code}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td style={{ ...s.td, maxWidth: '400px',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    color: '#8b949e', fontSize: '12px' }}>
-                    {log.ioc_matched && (
-                      <span style={{ color: '#f85149', marginRight: '6px' }}
-                        title="IOC Match">🚨</span>
-                    )}
-                    {log.message || '—'}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── Pagination ── */}
-      <div style={s.pagination}>
-        <button style={s.pageBtn(false, page === 1)}
-          disabled={page === 1} onClick={() => setPage(1)}>«</button>
-        <button style={s.pageBtn(false, page === 1)}
-          disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>
-
-        {pageNumbers().map(n => (
-          <button key={n} style={s.pageBtn(n === page, false)}
-            onClick={() => setPage(n)}>{n}</button>
+      {/* ── Header row ── */}
+      <div style={s.headerRow}>
+        {COLUMNS.map(col => (
+          <div
+            key={col.key}
+            style={{ ...s.th, flex: col.width === 'auto' ? '1 1 auto' : `0 0 ${col.width}` }}
+            onClick={() => handleSort(col.key)}
+          >
+            {col.label}
+            {col.sortable && <SortIcon col={col.key} sortBy={sortBy} sortDir={sortDir} />}
+          </div>
         ))}
-
-        <button style={s.pageBtn(false, page === totalPages)}
-          disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
-        <button style={s.pageBtn(false, page === totalPages)}
-          disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
-
-        <span style={{ color: '#8b949e', fontSize: '12px', marginLeft: '8px' }}>
-          Page {page} of {totalPages}
-        </span>
       </div>
+
+      {/* ── Virtualized body ── */}
+      {logs.length === 0 ? (
+        <div style={s.emptyRow}>
+          {loading
+            ? '⏳ Loading logs…'
+            : '📭 No logs found. Run the generator script or ingest some logs.'}
+        </div>
+      ) : (
+        <FixedSizeList
+          ref={listRef}
+          height={560}
+          itemCount={logs.length}
+          itemSize={ROW_HEIGHT}
+          width="100%"
+        >
+          {Row}
+        </FixedSizeList>
+      )}
     </div>
   )
 }
