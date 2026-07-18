@@ -43,7 +43,13 @@ class TestRuleCRUD:
         data = r.json()
         assert data["name"] == "Test Rule"
         assert data["enabled"] == True
-        return data["id"]
+
+        # Cleanup: this rule matches status_code=500 with threshold=1,
+        # which is broad enough to keep firing against unrelated traffic
+        # every 30s evaluation cycle if left behind. Confirmed via a real
+        # incident (23,000+ stray LOW alerts accumulated in the DB
+        # before this cleanup was added).
+        client.delete(f"/rules/{data['id']}")
 
     def test_update_rule(self, client):
         # Create then update
@@ -62,6 +68,8 @@ class TestRuleCRUD:
         assert r2.status_code == 200
         assert r2.json()["threshold"] == 99
 
+        client.delete(f"/rules/{rule_id}")
+
     def test_toggle_rule(self, client):
         payload = {
             "name": "Toggle Test Rule",
@@ -77,6 +85,8 @@ class TestRuleCRUD:
         r2 = client.patch(f"/rules/{rule_id}/toggle")
         assert r2.status_code == 200
         assert r2.json()["enabled"] == False
+
+        client.delete(f"/rules/{rule_id}")
 
     def test_delete_rule(self, client):
         payload = {

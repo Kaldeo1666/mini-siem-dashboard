@@ -12,7 +12,7 @@ router = APIRouter(prefix="/logs", tags=["logs"])
 @router.get("")
 async def get_logs(
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=100),
+    page_size: int = Query(50, ge=1, le=10000),
     sort_by: str = Query("timestamp"),
     sort_dir: Literal["asc", "desc"] = Query("desc"),
     source_type: str | None = Query(None),
