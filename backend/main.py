@@ -5,7 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import asyncio
 from database import init_db, SessionLocal
 from models import AlertRule, AlertSeverity, CorrelationRule, Baseline
-from routers import logs, ingest, rules, alerts, ws, hunt, cases, reports
+from routers import logs, ingest, rules, alerts, ws, hunt, cases, reports, demo as demo_router
 from auth import router as auth_router, verify_api_key, generate_and_seed_default_key
 import retention 
 import routers.ioc as ioc
@@ -195,6 +195,7 @@ app.include_router(ws.router)  # exempt: browsers can't set custom headers on a 
 app.include_router(hunt.router, dependencies=[Depends(verify_api_key)])
 app.include_router(cases.router, dependencies=[Depends(verify_api_key)])
 app.include_router(reports.router, dependencies=[Depends(verify_api_key)])
+app.include_router(demo_router.router, dependencies=[Depends(verify_api_key)])
 @app.get("/health")
 def health_check():
     """Simple liveness check — used by tests and monitoring."""
