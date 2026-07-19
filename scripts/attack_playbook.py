@@ -27,7 +27,10 @@ except ImportError:
     print("Missing dependency: pip install httpx")
     sys.exit(1)
 
+import os
+
 ATTACKER_IP = "10.99.0.1"
+API_KEY = os.getenv("DEFAULT_API_KEY", "dev-local-siem-key-2026")
 
 
 def now_iso():
@@ -143,7 +146,7 @@ def main():
     print(f"  Target: {args.api}")
     print("=" * 60)
 
-    with httpx.Client() as client:
+    with httpx.Client(headers={"X-API-Key": API_KEY}) as client:
         try:
             r = client.get(f"{args.api}/health", timeout=5.0)
             print(f"API reachable: {r.json()}")

@@ -21,7 +21,7 @@ const LEVELS       = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL']
 // renders the ~15-20 rows actually visible in the viewport regardless
 // of how large this working set is -- this is what makes 10,000+ row
 // datasets scroll smoothly instead of choking the DOM.
-const FETCH_LIMIT = 2000
+const FETCH_LIMIT = 10000
 const ROW_HEIGHT = 36
 
 const TIME_PRESETS = [
