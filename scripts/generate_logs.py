@@ -38,6 +38,8 @@ except ImportError:
     print("Missing dependency: pip install httpx")
     sys.exit(1)
 
+API_KEY = __import__("os").getenv("DEFAULT_API_KEY", "dev-local-siem-key-2026")
+
 
 # ── Fake data pools ───────────────────────────────────────────────────────────
 
@@ -312,7 +314,7 @@ Press Ctrl+C to stop.
     total_sent = 0
     total_failed = 0
 
-    with httpx.Client() as client:
+    with httpx.Client(headers={"X-API-Key": API_KEY}) as client:
         # Check API is reachable
         try:
             r = client.get(f"{args.api}/health", timeout=5.0)
