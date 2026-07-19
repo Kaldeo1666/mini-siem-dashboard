@@ -2,6 +2,33 @@
 
 ## V5 — In Progress (Weeks 11-12, Theme: Polish, Demo Mode & Public Deployment)
 
+### Day 2 — One-click attack simulation demo mode (2026-07-19)
+- Built `backend/demo.py`: `reset_demo_data()` clears logs, alerts,
+  cases (case_notes/case_alerts join tables first, respecting FK order),
+  and baselines -- preserves alert_rules, correlation_rules, ioc_entries,
+  and api_keys so the demo can be re-run indefinitely without re-seeding
+  detection rules or losing API access.
+- `run_demo_async()` runs as a background asyncio task (not a blocking
+  subprocess as the spec's literal wording suggested) so `POST /demo/run`
+  returns immediately; paces one stage every 8 seconds via `asyncio.sleep`
+  so alerts appear live on the dashboard as each stage's rules actually
+  fire, rather than all at once. In-memory `_status` dict (same pattern
+  as Day 5's retention status) tracks `running`, `current_stage`,
+  `stages_completed`, timestamps, and any error, polled by the frontend.
+- New `routers/demo.py`: `POST /demo/reset`, `POST /demo/run` (409 if
+  already running), `GET /demo/status`.
+- New `frontend/src/components/DemoControls.jsx`: "Run Demo" button in
+  the nav bar; while running, shows a progress banner with 4 stage pills
+  (pending/active/done states) polling `/demo/status` every 2s.
+- **Verified live end-to-end**, screenshots at each stage: reset
+  correctly zeroed alerts/stats mid-run, all 4 stage pills progressed
+  pending -> active -> done in order, WebSocket pushed each stage's
+  alerts (Port Scan Detection, Brute Force Login, Suspicious Admin
+  Access, Data Exfiltration Attempt, plus the Recon-to-Exploitation
+  correlation alert and the real hunt-promoted rule) with live timestamps
+  as they fired, button and banner correctly returned to idle state after
+  completion (~57s total run time), confirmed re-runnable.
+
 ### Day 1 — Professional SOC dashboard aesthetic, partial (2026-07-19)
 - Created `frontend/src/theme.js`: centralized color palette matching the
   v5.md spec (near-black `#0f1117` background, severity colors

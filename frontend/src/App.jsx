@@ -6,6 +6,7 @@ import EventsChart from './components/EventsChart.jsx'
 import TopIPsTable from './components/TopIPsTable.jsx'
 import HuntPage from './components/HuntPage.jsx'
 import CasesPage from './components/CasesPage.jsx'
+import DemoControls from './components/DemoControls.jsx'
 
 // Base URL for API calls
 // Inside Docker, the Vite proxy rewrites /api → http://api:8000
@@ -124,11 +125,14 @@ export default function App() {
             📁 Cases
           </button>
         </div>
-        {totalLogs !== null && (
-          <div style={styles.navBadge}>
-            {totalLogs.toLocaleString()} logs ingested
-          </div>
-        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <DemoControls apiBase={API_BASE} />
+          {totalLogs !== null && (
+            <div style={styles.navBadge}>
+              {totalLogs.toLocaleString()} logs ingested
+            </div>
+          )}
+        </div>
       </nav>
 
       <main style={styles.main}>
