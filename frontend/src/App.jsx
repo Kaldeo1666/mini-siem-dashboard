@@ -16,11 +16,13 @@ const API_HEADERS = { 'X-API-Key': API_KEY }
 
 export { API_BASE, API_KEY, API_HEADERS }
 
+import { COLORS } from './theme.js'
+
 const styles = {
   app: {
     minHeight: '100vh',
-    background: '#0d1117',
-    color: '#e6edf3',
+    background: COLORS.bg,
+    color: COLORS.textPrimary,
   },
   nav: {
     background: '#161b22',

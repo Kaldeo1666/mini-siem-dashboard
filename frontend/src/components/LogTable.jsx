@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { FixedSizeList } from 'react-window'
 import { API_HEADERS } from '../App.jsx'
+import { COLORS } from '../theme.js'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const LEVEL_BADGE = {
-  DEBUG:    { bg: '#21262d', color: '#8b949e', border: '#30363d' },
-  INFO:     { bg: '#1f3a5f', color: '#58a6ff', border: '#1f6feb' },
-  WARN:     { bg: '#3d2b00', color: '#e3b341', border: '#9e6a03' },
-  ERROR:    { bg: '#3d1c1c', color: '#f85149', border: '#da3633' },
-  CRITICAL: { bg: '#4a0e0e', color: '#ff7b72', border: '#f85149' },
+  DEBUG:    { bg: COLORS.bgInset, color: COLORS.textSecondary, border: COLORS.border, icon: '⚪' },
+  INFO:     { bg: '#0d1f3a', color: COLORS.severity.LOW.color, border: COLORS.severity.LOW.color, icon: '🔵' },
+  WARN:     { bg: COLORS.severity.MEDIUM.bg, color: COLORS.severity.MEDIUM.color, border: COLORS.severity.MEDIUM.color, icon: '🟡' },
+  ERROR:    { bg: COLORS.severity.HIGH.bg, color: COLORS.severity.HIGH.color, border: COLORS.severity.HIGH.color, icon: '🟠' },
+  CRITICAL: { bg: COLORS.severity.CRITICAL.bg, color: COLORS.severity.CRITICAL.color, border: COLORS.severity.CRITICAL.color, icon: '🔴' },
 }
 
 const SOURCE_TYPES = ['apache', 'nginx', 'syslog', 'json', 'firewall', 'windows_event']
@@ -52,7 +53,7 @@ function LevelBadge({ level }) {
       borderRadius: '4px', padding: '1px 7px',
       fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
     }}>
-      {level}
+      {c.icon} {level}
     </span>
   )
 }
@@ -119,7 +120,7 @@ const s = {
 
 const COLUMNS = [
   { key: 'timestamp',   label: 'Timestamp',    sortable: true,  width: '160px' },
-  { key: 'level',       label: 'Level',        sortable: false, width: '80px'  },
+  { key: 'level',       label: 'Level',        sortable: false, width: '100px' },
   { key: 'source_type', label: 'Source',       sortable: true,  width: '90px'  },
   { key: 'source_host', label: 'Host',         sortable: true,  width: '120px' },
   { key: 'source_ip',   label: 'Source IP',    sortable: true,  width: '120px' },
@@ -231,7 +232,7 @@ export default function LogTable({ apiBase }) {
         onMouseLeave={() => setHoveredRow(null)}
       >
         <div style={{ ...s.td, flex: `0 0 160px`, fontFamily: 'monospace' }}>{fmtTs(log.timestamp)}</div>
-        <div style={{ ...s.td, flex: `0 0 80px` }}><LevelBadge level={log.level} /></div>
+        <div style={{ ...s.td, flex: `0 0 100px` }}><LevelBadge level={log.level} /></div>
         <div style={{ ...s.td, flex: `0 0 90px`, color: '#8b949e', fontFamily: 'monospace' }}>{log.source_type}</div>
         <div style={{ ...s.td, flex: `0 0 120px`, fontFamily: 'monospace' }}>{log.source_host || '—'}</div>
         <div style={{ ...s.td, flex: `0 0 120px`, fontFamily: 'monospace', color: '#79c0ff' }}>{log.source_ip || '—'}</div>
