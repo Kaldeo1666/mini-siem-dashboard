@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { API_HEADERS } from '../App.jsx'
+import { COLORS } from '../theme.js'
 
+// Log levels don't map 1:1 to alert severities, so this stays a local
+// mapping rather than reusing COLORS.severity — but pulls the same
+// underlying palette for visual consistency across the dashboard.
 const LEVEL_COLORS = {
-  DEBUG:    { bg: '#21262d', text: '#8b949e', border: '#30363d' },
-  INFO:     { bg: '#1f3a5f', text: '#58a6ff', border: '#1f6feb' },
-  WARN:     { bg: '#3d2b00', text: '#e3b341', border: '#9e6a03' },
-  ERROR:    { bg: '#3d1c1c', text: '#f85149', border: '#da3633' },
-  CRITICAL: { bg: '#4a0e0e', text: '#ff7b72', border: '#f85149' },
+  DEBUG:    { bg: COLORS.bgInset, text: COLORS.textSecondary, border: COLORS.border, icon: '⚪' },
+  INFO:     { bg: '#0d1f3a', text: COLORS.severity.LOW.color, border: COLORS.severity.LOW.color, icon: '🔵' },
+  WARN:     { bg: COLORS.severity.MEDIUM.bg, text: COLORS.severity.MEDIUM.color, border: COLORS.severity.MEDIUM.color, icon: '🟡' },
+  ERROR:    { bg: COLORS.severity.HIGH.bg, text: COLORS.severity.HIGH.color, border: COLORS.severity.HIGH.color, icon: '🟠' },
+  CRITICAL: { bg: COLORS.severity.CRITICAL.bg, text: COLORS.severity.CRITICAL.color, border: COLORS.severity.CRITICAL.color, icon: '🔴' },
 }
 
 const SOURCE_ICONS = {
@@ -58,7 +62,7 @@ export default function StatsBar({ apiBase }) {
                 {count.toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: c.text, opacity: 0.8, marginTop: '2px' }}>
-                {level}
+                {c.icon} {level}
               </span>
             </div>
           )

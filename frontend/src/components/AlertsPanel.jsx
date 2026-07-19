@@ -1,13 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import AttackTimeline from './AttackTimeline.jsx'
 import { API_HEADERS } from '../App.jsx'
-
-const SEVERITY_COLORS = {
-  CRITICAL: { bg: '#4a0e0e', color: '#ff7b72', border: '#f85149' },
-  HIGH:     { bg: '#3d1c1c', color: '#f85149', border: '#da3633' },
-  MEDIUM:   { bg: '#3d2b00', color: '#e3b341', border: '#9e6a03' },
-  LOW:      { bg: '#1f3a5f', color: '#58a6ff', border: '#1f6feb' },
-}
+import { severityStyle } from '../theme.js'
 
 const STATUS_COLORS = {
   NEW:           { bg: '#3d1c1c', color: '#f85149' },
@@ -119,7 +113,7 @@ export default function AlertsPanel({ apiBase }) {
     },
     badge: (colors) => ({
       background: colors.bg, color: colors.color,
-      border: `1px solid ${colors.border || colors.color}`,
+      border: `1px solid ${colors.color}`,
       borderRadius: '4px', padding: '2px 8px',
       fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap',
     }),
@@ -154,14 +148,14 @@ export default function AlertsPanel({ apiBase }) {
         </div>
       ) : (
         alerts.map(alert => {
-          const sevColors = SEVERITY_COLORS[alert.severity] || SEVERITY_COLORS.LOW
+          const sevColors = severityStyle(alert.severity)
           const statColors = STATUS_COLORS[alert.status] || STATUS_COLORS.NEW
           const nextStatus = NEXT_STATUS[alert.status]
 
           return (
             <div key={alert.id} style={s.alertRow}>
-              {/* Severity badge */}
-              <span style={s.badge(sevColors)}>{alert.severity}</span>
+              {/* Severity badge — color AND icon, not color alone (accessibility) */}
+              <span style={s.badge(sevColors)}>{sevColors.icon} {alert.severity}</span>
 
               {/* Main content */}
               <div style={{ flex: 1 }}>

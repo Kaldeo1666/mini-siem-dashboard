@@ -1,5 +1,31 @@
 # Progress — Mini SIEM Dashboard
 
+## V5 — In Progress (Weeks 11-12, Theme: Polish, Demo Mode & Public Deployment)
+
+### Day 1 — Professional SOC dashboard aesthetic, partial (2026-07-19)
+- Created `frontend/src/theme.js`: centralized color palette matching the
+  v5.md spec (near-black `#0f1117` background, severity colors
+  CRITICAL/HIGH/MEDIUM/LOW mapped to red/orange/yellow/blue), plus a
+  `severityStyle()` helper and accessible icon-per-severity mapping
+  (color is never the only signal, per the spec's accessibility note).
+- Applied the shared palette + icons to `AlertsPanel.jsx` (severity
+  badges), `StatsBar.jsx` (level counters), and `LogTable.jsx` (level
+  badges) -- verified live in-browser for all three.
+- **Bug found and fixed during verification:** adding the icon character
+  to `LogTable.jsx`'s level badge overflowed the column's fixed 80px
+  width, truncating "WARN"/"INFO"/etc to "WA.../INF...". Widened the
+  `level` column (both `COLUMNS` definition and the row's flex-basis) to
+  100px; confirmed full text renders correctly afterward.
+- **Deliberately scoped as partial, not full Core-item completion:**
+  `EventsChart.jsx`, `TopIPsTable.jsx`, `HuntPage.jsx`, and `CasesPage.jsx`
+  still use their own local color objects, not `theme.js`. These don't
+  have severity indicators needing the accessibility fix, but should
+  still adopt the shared palette for full visual consistency across the
+  dashboard -- flagged as a follow-up, not silently left inconsistent.
+- Confirmed App.jsx's page background now matches the spec's exact
+  `#0f1117`, not the previous GitHub-dark `#0d1117`.
+
+
 ## V4 — In Progress (Weeks 9-10, Theme: Hardening, Reports, Performance & API Security)
 
 ### Day 6 — Virtual scrolling + test-pollution incident (2026-07-18)
