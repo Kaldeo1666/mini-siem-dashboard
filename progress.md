@@ -2,6 +2,32 @@
 
 ## V5 — In Progress (Weeks 11-12, Theme: Polish, Demo Mode & Public Deployment)
 
+### Day 4 — Guided dashboard tour (2026-07-20)
+- Added `shepherd.js` dependency. Built `frontend/src/components/Tour.jsx`:
+  a 6-step guided walkthrough, dark-themed to match the dashboard palette,
+  auto-launches once per browser session (via `sessionStorage`, not
+  `localStorage` -- resets each new tab/session rather than persisting
+  forever, appropriate for a portfolio demo) and re-launchable anytime
+  via a "🧭 Take a Tour" button in the nav.
+- Added `id` attributes to 6 existing components so Shepherd has real
+  DOM anchors to attach tooltips to: `EventsChart`, `AlertsPanel`,
+  `StatsBar`, the Hunt/Cases nav buttons, and the Run Demo button.
+- **Mapping note, stated honestly:** the spec's step 3 asks to highlight
+  "the alert severity heatmap" -- no heatmap component exists anywhere
+  in this codebase (V3's dashboard uses a filterable alert list and a
+  StatsBar counter tile row, not a time x severity grid). Substituted
+  StatsBar (closest existing severity-at-a-glance view) rather than
+  writing tour copy referencing a UI element that doesn't exist, or
+  quietly building a whole new heatmap feature inside a "tour" day.
+  Step 2 ("active alert counters") similarly mapped to the Alerts
+  panel's live count + status filter tabs, the actual UI that shows
+  counts today.
+- Verified live in both an incognito window (confirming session-based
+  auto-launch on first visit) and a normal browser window (confirming
+  manual re-launch via the button) -- all 6 steps present, correctly
+  positioned, back/next navigation working, both entry paths confirmed
+  working by the user directly.
+
 ### Day 3 — Alert export (CSV + JSON) (2026-07-19)
 - New `GET /alerts/export` endpoint (auth-protected): supports
   `format=csv|json`, and `start`/`end`/`severity`/`status` filters.

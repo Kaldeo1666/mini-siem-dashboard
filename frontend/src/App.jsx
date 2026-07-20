@@ -7,6 +7,7 @@ import TopIPsTable from './components/TopIPsTable.jsx'
 import HuntPage from './components/HuntPage.jsx'
 import CasesPage from './components/CasesPage.jsx'
 import DemoControls from './components/DemoControls.jsx'
+import Tour from './components/Tour.jsx'
 
 // Base URL for API calls
 // Inside Docker, the Vite proxy rewrites /api → http://api:8000
@@ -62,6 +63,22 @@ const styles = {
 export default function App() {
   const [totalLogs, setTotalLogs] = useState(null)
   const [tab, setTab] = useState('dashboard')
+  const [tourLaunchCount, setTourLaunchCount] = useState(0)
+  const [tourSeen, setTourSeen] = useState(false)
+
+  // Auto-launch the tour once on first visit (per browser/session), so
+  // first-time users see it without hunting for the button. Uses
+  // sessionStorage rather than localStorage per the artifact/browser-
+  // storage rules for this codebase -- resets each new tab/session
+  // rather than persisting forever, which is fine for a portfolio demo.
+  useEffect(() => {
+    const seen = window.sessionStorage?.getItem('mini-siem-tour-seen')
+    if (!seen) {
+      setTourLaunchCount(1)
+      window.sessionStorage?.setItem('mini-siem-tour-seen', 'true')
+    }
+    setTourSeen(true)
+  }, [])
 
   // Refresh total count every 10 seconds (stretch goal badge)
   const fetchTotal = useCallback(async () => {
@@ -105,6 +122,7 @@ export default function App() {
             📊 Dashboard
           </button>
           <button
+            id="tour-nav-hunt"
             onClick={() => setTab('hunt')}
             style={{
               background: tab === 'hunt' ? '#1f6feb' : '#21262d',
@@ -115,6 +133,7 @@ export default function App() {
             🔎 Threat Hunting
           </button>
           <button
+            id="tour-nav-cases"
             onClick={() => setTab('cases')}
             style={{
               background: tab === 'cases' ? '#1f6feb' : '#21262d',
@@ -126,6 +145,16 @@ export default function App() {
           </button>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            onClick={() => setTourLaunchCount(c => c + 1)}
+            style={{
+              background: '#21262d', border: '1px solid #30363d', color: '#8b949e',
+              borderRadius: '6px', padding: '5px 14px', fontSize: '13px', cursor: 'pointer',
+            }}
+            title="Take a guided tour of the dashboard"
+          >
+            🧭 Take a Tour
+          </button>
           <DemoControls apiBase={API_BASE} />
           {totalLogs !== null && (
             <div style={styles.navBadge}>
@@ -134,6 +163,8 @@ export default function App() {
           )}
         </div>
       </nav>
+
+      {tourSeen && <Tour launchSignal={tourLaunchCount} />}
 
       <main style={styles.main}>
         {tab === 'dashboard' ? (

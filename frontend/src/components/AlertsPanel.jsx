@@ -153,7 +153,7 @@ export default function AlertsPanel({ apiBase }) {
   }
 
   return (
-    <div style={s.card}>
+    <div id="tour-alerts-panel" style={s.card}>
       <div style={s.header}>
         <span style={s.title}>🚨 Alerts ({total})</span>
         {['ALL', 'NEW', 'ACKNOWLEDGED', 'INVESTIGATING', 'RESOLVED'].map(f => (

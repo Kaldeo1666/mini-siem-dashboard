@@ -90,6 +90,7 @@ export default function DemoControls({ apiBase }) {
   return (
     <>
       <button
+        id="tour-run-demo"
         style={s.button}
         onClick={runDemo}
         disabled={isRunning}
