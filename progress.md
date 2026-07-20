@@ -2,6 +2,38 @@
 
 ## V5 — In Progress (Weeks 11-12, Theme: Polish, Demo Mode & Public Deployment)
 
+### Day 3 — Alert export (CSV + JSON) (2026-07-19)
+- New `GET /alerts/export` endpoint (auth-protected): supports
+  `format=csv|json`, and `start`/`end`/`severity`/`status` filters.
+  **Schema mapping note, stated honestly:** the spec's requested columns
+  (`group_value`, `matched_count`, `first_seen`, `last_seen`) come from
+  an earlier alert-schema design than what's actually implemented.
+  Mapped to real equivalents: `group_value` -> `source_ip`,
+  `first_seen`/`last_seen` -> both map to `triggered_at` (no separate
+  first/last tracking exists), `matched_count` omitted (not tracked).
+- Frontend: "Export CSV" / "Export JSON" buttons in `AlertsPanel.jsx`,
+  fetch-then-blob-download pattern (a plain link/window.open can't
+  attach the `X-API-Key` auth header, so direct navigation can't
+  authenticate). Exports respect the panel's existing status filter tab
+  -- date-range and severity filter UI don't exist in the frontend yet,
+  so those params are only wired on the backend for now, not silently
+  faked on the frontend.
+- **Regression found and fixed during verification:** the initial edit
+  to `routers/alerts.py` accidentally replaced the base `GET /alerts`
+  (`list_alerts`) route entirely instead of inserting the new
+  `/export` route after it -- caused `GET /alerts` to 404, breaking
+  5 previously-passing tests across `test_auth.py` and
+  `test_rules_engine.py`. Caught by running the full suite rather than
+  just the new test file, restored the missing route, verified route
+  ordering (`""` -> `/export` -> `/{alert_id}` -> `/{alert_id}/timeline`,
+  specific paths before the catch-all pattern).
+- New `tests/test_export.py` (5 tests): auth required, JSON returns a
+  well-formed array with all 9 mapped columns, CSV has correct headers
+  and content-disposition, status filter produces disjoint NEW vs
+  ACKNOWLEDGED result sets, invalid date returns 400.
+- **68/68 tests passing** (63 prior + 5 new), confirming both the new
+  feature and the regression fix.
+
 ### Day 2 — One-click attack simulation demo mode (2026-07-19)
 - Built `backend/demo.py`: `reset_demo_data()` clears logs, alerts,
   cases (case_notes/case_alerts join tables first, respecting FK order),
