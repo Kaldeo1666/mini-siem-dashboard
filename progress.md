@@ -2,6 +2,23 @@
 
 ## V5 — In Progress (Weeks 11-12, Theme: Polish, Demo Mode & Public Deployment)
 
+### Day 5 — README finalization + agent/context.md update (2026-07-20)
+- Rewrote `README.md`: Mermaid architecture diagram (ingestion sources ->
+  backend engines/jobs -> PostgreSQL -> frontend, plus the WebSocket
+  live-push path), full feature list, tech stack table, Docker Compose
+  service table, `docker compose up --build` quick start, API key setup
+  instructions (including an explicit warning that the committed dev
+  keys are placeholders, not for public deployment), project structure
+  tree, contributor guidelines.
+- Rewrote `agent/context.md` (the item deferred at V4 closeout): documents
+  the actual current architecture including all V4/V5 additions (auth,
+  retention, demo mode, export, tour), the 5 background jobs and their
+  intervals, the 3 known pieces of technical debt (dual rule-seeding
+  systems, simplified correlation rule, weak hardcoded dev keys) stated
+  plainly rather than omitted, data model highlights, and testing/FK
+  ordering conventions learned the hard way across this project's history
+  (repeated test-cleanup and FK-ordering bugs).
+
 ### Day 4 — Guided dashboard tour (2026-07-20)
 - Added `shepherd.js` dependency. Built `frontend/src/components/Tour.jsx`:
   a 6-step guided walkthrough, dark-themed to match the dashboard palette,
