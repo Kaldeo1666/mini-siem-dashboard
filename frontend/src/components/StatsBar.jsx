@@ -40,7 +40,7 @@ export default function StatsBar({ apiBase }) {
   if (!stats) return null
 
   return (
-    <div style={{ marginBottom: '20px' }}>
+    <div id="tour-stats-bar" style={{ marginBottom: '20px' }}>
       {/* Level counts */}
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
         {['CRITICAL', 'ERROR', 'WARN', 'INFO', 'DEBUG'].map(level => {

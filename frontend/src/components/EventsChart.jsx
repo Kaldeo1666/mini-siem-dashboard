@@ -64,7 +64,7 @@ export default function EventsChart({ apiBase }) {
   }
 
   return (
-    <div style={s.card}>
+    <div id="tour-events-chart" style={s.card}>
       <div style={s.title}>📈 Events / Minute (last 60 min)</div>
       {chartData.length === 0 ? (
         <div style={s.empty}>
