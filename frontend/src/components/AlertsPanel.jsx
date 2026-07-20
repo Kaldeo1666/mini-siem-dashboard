@@ -48,6 +48,30 @@ export default function AlertsPanel({ apiBase }) {
     }
   }
 
+  // Exports respect the current status filter (the only filter this
+  // panel exposes today). Fetches with the auth header, then downloads
+  // via a hidden anchor -- a plain link/window.open can't attach
+  // custom headers, so the browser can't authenticate a direct navigation.
+  const exportAlerts = async (format) => {
+    try {
+      const params = new URLSearchParams({ format })
+      if (filter !== 'ALL') params.set('status', filter)
+      const res = await fetch(`${apiBase}/alerts/export?${params}`, { headers: API_HEADERS })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `alerts-export.${format === 'csv' ? 'csv' : 'json'}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Export failed:', e)
+    }
+  }
+
   // WebSocket connection for real-time alerts
   useEffect(() => {
     const wsUrl = apiBase.replace('http', 'ws') + '/ws/alerts'
@@ -138,6 +162,10 @@ export default function AlertsPanel({ apiBase }) {
             {f}
           </button>
         ))}
+        <button style={s.filterBtn(false)}
+          onClick={() => exportAlerts('csv')}>⬇ Export CSV</button>
+        <button style={s.filterBtn(false)}
+          onClick={() => exportAlerts('json')}>⬇ Export JSON</button>
         <button style={{ ...s.filterBtn(false), marginLeft: 'auto' }}
           onClick={fetchAlerts}>↻ Refresh</button>
       </div>

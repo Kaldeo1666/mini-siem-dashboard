@@ -1,6 +1,9 @@
 import uuid
+import csv
+import io
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +42,83 @@ async def list_alerts(
     result = db.execute(select(Alert).where(where).order_by(Alert.triggered_at.desc()).offset(offset).limit(page_size))
     alerts = result.scalars().all()
     return {"total": total, "page": page, "page_size": page_size, "alerts": [a.to_dict() for a in alerts]}
+
+
+@router.get("/export")
+async def export_alerts(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    start: str | None = Query(None, description="ISO 8601 start of triggered_at range"),
+    end: str | None = Query(None, description="ISO 8601 end of triggered_at range"),
+    severity: str | None = Query(None),
+    status: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Exports alerts as CSV or JSON, respecting date range / severity /
+    status filters.
+
+    Column mapping note: this schema doesn't have group_value,
+    matched_count, first_seen, or last_seen fields (an earlier design
+    than what's actually implemented). Mapped to the closest real
+    equivalents: group_value -> source_ip, first_seen/last_seen -> both
+    map to triggered_at (no separate first/last tracking exists),
+    matched_count is omitted (not tracked).
+    """
+    conditions = []
+    if start:
+        try:
+            start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+            conditions.append(Alert.triggered_at >= start_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start date, must be ISO 8601")
+    if end:
+        try:
+            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+            conditions.append(Alert.triggered_at <= end_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end date, must be ISO 8601")
+    if severity:
+        conditions.append(Alert.severity == severity.upper())
+    if status:
+        conditions.append(Alert.status == status.upper())
+
+    where = and_(*conditions) if conditions else True
+    result = db.execute(select(Alert).where(where).order_by(Alert.triggered_at.desc()))
+    alerts = result.scalars().all()
+
+    rows = [
+        {
+            "id": a.id,
+            "rule_name": a.rule_name,
+            "severity": a.severity.value if a.severity else None,
+            "status": a.status.value if a.status else None,
+            "group_value": str(a.source_ip) if a.source_ip else None,
+            "matched_count": None,
+            "first_seen": a.triggered_at.isoformat() if a.triggered_at else None,
+            "last_seen": a.triggered_at.isoformat() if a.triggered_at else None,
+            "mitre_technique_id": a.mitre_technique_id,
+        }
+        for a in alerts
+    ]
+
+    if format == "json":
+        return JSONResponse(content=rows)
+
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=["id", "rule_name", "severity", "status", "group_value",
+                    "matched_count", "first_seen", "last_seen", "mitre_technique_id"],
+    )
+    writer.writeheader()
+    writer.writerows(rows)
+
+    filename = f"alerts-export-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 @router.get("/{alert_id}")
 async def get_alert(alert_id: str, db: AsyncSession = Depends(get_db)):
