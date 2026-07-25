@@ -28,8 +28,8 @@ services:
     environment:
       DATABASE_URL: postgresql://siem:siem_password@db:5432/siem_db
       PYTHONUNBUFFERED: "1"
-      DEFAULT_API_KEY: dev-local-siem-key-2026
-      MASTER_API_KEY: master-key-change-in-prod
+      DEFAULT_API_KEY: ${DEFAULT_API_KEY:-dev-local-siem-key-2026}
+      MASTER_API_KEY: ${MASTER_API_KEY:-master-key-change-in-prod}
       LOG_RETENTION_DAYS: "30"
     depends_on:
       db:
