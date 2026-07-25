@@ -108,11 +108,24 @@ flowchart TB
 
 ## Quick Start
 
+### Option A — Clone and build
+
 ```bash
 git clone https://github.com/Kaldeo1666/mini-siem-dashboard.git
 cd mini-siem-dashboard
 docker compose up --build
 ```
+
+### Option B — Pull pre-built images from Docker Hub
+
+```bash
+docker pull kaldeo/mini-siem-api:latest
+docker pull kaldeo/mini-siem-frontend:latest
+```
+
+**Note on platform support:** these images are published for `linux/amd64` only. An initial multi-arch (`amd64` + `arm64`) build was attempted but the arm64 leg took 45+ minutes under QEMU emulation without completing (compiling `psycopg2`/`gcc` under cross-platform emulation is disproportionately slow) — amd64-only was the pragmatic choice for a portfolio project rather than an indefinite build. Apple Silicon users can still run these via Docker Desktop's built-in Rosetta emulation at the runtime level, which is much faster than build-time QEMU emulation.
+
+See `docker-compose.yml` for the full service configuration (database, environment variables, ports) if running the pulled images directly rather than via `docker compose up --build`.
 
 Open **http://localhost:3000**.
 
