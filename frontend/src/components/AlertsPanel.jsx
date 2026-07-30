@@ -148,7 +148,7 @@ export default function AlertsPanel({ apiBase }) {
     },
     empty: {
       padding: '40px', textAlign: 'center',
-      color: '#484f58', fontSize: '14px',
+      color: '#7d8590', fontSize: '14px',
     },
   }
 
@@ -221,7 +221,7 @@ export default function AlertsPanel({ apiBase }) {
                   {alert.source_type && <span>Source: {alert.source_type} · </span>}
                   <span>Triggered: {new Date(alert.triggered_at).toLocaleString()}</span>
                   {alert.description && (
-                    <div style={{ marginTop: '4px', color: '#6e7681' }}>{alert.description}</div>
+                    <div style={{ marginTop: '4px', color: '#7d8590' }}>{alert.description}</div>
                   )}
                 </div>
                 {alert.notes && (

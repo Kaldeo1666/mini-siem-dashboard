@@ -11,14 +11,14 @@ export const COLORS = {
   border: '#30363d',
   textPrimary: '#e6edf3',
   textSecondary: '#8b949e',
-  textMuted: '#484f58',
+  textMuted: '#7d8590',
   accent: '#3b82f6',
 
   severity: {
-    CRITICAL: { color: '#ef4444', bg: '#3b0d0d', icon: '🔴' },
-    HIGH:     { color: '#f97316', bg: '#3a1d06', icon: '🟠' },
-    MEDIUM:   { color: '#eab308', bg: '#332905', icon: '🟡' },
-    LOW:      { color: '#3b82f6', bg: '#0d1f3a', icon: '🔵' },
+    CRITICAL: { color: '#f87171', bg: '#3b0d0d', icon: '🔴' },
+    HIGH:     { color: '#fb923c', bg: '#3a1d06', icon: '🟠' },
+    MEDIUM:   { color: '#facc15', bg: '#332905', icon: '🟡' },
+    LOW:      { color: '#58a6ff', bg: '#0d1f3a', icon: '🔵' },
   },
 }
 

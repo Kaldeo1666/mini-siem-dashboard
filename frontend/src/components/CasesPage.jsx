@@ -123,7 +123,7 @@ export default function CasesPage({ apiBase }) {
         <div style={s.card}>
           <div style={s.title}>📁 Cases ({cases.length})</div>
           {cases.length === 0 ? (
-            <div style={{ color: '#484f58', fontSize: '13px' }}>No cases yet.</div>
+            <div style={{ color: '#7d8590', fontSize: '13px' }}>No cases yet.</div>
           ) : (
             cases.map(c => {
               const colors = STATUS_COLORS[c.status] || STATUS_COLORS.OPEN
@@ -144,7 +144,7 @@ export default function CasesPage({ apiBase }) {
       {/* Case detail */}
       <div style={s.card}>
         {!selectedCase ? (
-          <div style={{ color: '#484f58', textAlign: 'center', padding: '60px', fontSize: '14px' }}>
+          <div style={{ color: '#7d8590', textAlign: 'center', padding: '60px', fontSize: '14px' }}>
             Select a case from the list to view details.
           </div>
         ) : (
@@ -178,7 +178,7 @@ export default function CasesPage({ apiBase }) {
                 <button style={s.btn} onClick={addAlert}>Add</button>
               </div>
               {selectedCase.alerts.length === 0 ? (
-                <div style={{ color: '#484f58', fontSize: '13px' }}>No alerts linked yet.</div>
+                <div style={{ color: '#7d8590', fontSize: '13px' }}>No alerts linked yet.</div>
               ) : (
                 selectedCase.alerts.map(a => (
                   <div key={a.id} style={s.alertItem}>
@@ -199,7 +199,7 @@ export default function CasesPage({ apiBase }) {
                 <button style={s.btn} onClick={addNote}>Add</button>
               </div>
               {selectedCase.notes.length === 0 ? (
-                <div style={{ color: '#484f58', fontSize: '13px' }}>No notes yet.</div>
+                <div style={{ color: '#7d8590', fontSize: '13px' }}>No notes yet.</div>
               ) : (
                 selectedCase.notes.map(n => (
                   <div key={n.id} style={s.noteItem}>

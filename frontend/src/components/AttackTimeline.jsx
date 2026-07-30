@@ -96,7 +96,7 @@ export default function AttackTimeline({ apiBase, alertId, onClose }) {
         )}
 
         {!data && !error && (
-          <div style={{ color: '#484f58', textAlign: 'center', padding: '30px' }}>⏳ Loading…</div>
+          <div style={{ color: '#7d8590', textAlign: 'center', padding: '30px' }}>⏳ Loading…</div>
         )}
       </div>
     </div>

@@ -60,7 +60,7 @@ export default function EventsChart({ apiBase }) {
       borderRadius: '10px', padding: '16px', marginBottom: '24px',
     },
     title: { color: '#e6edf3', fontWeight: 700, fontSize: '15px', marginBottom: '12px' },
-    empty: { padding: '40px', textAlign: 'center', color: '#484f58', fontSize: '14px' },
+    empty: { padding: '40px', textAlign: 'center', color: '#7d8590', fontSize: '14px' },
   }
 
   return (

@@ -107,7 +107,7 @@ const s = {
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
   emptyRow: {
-    textAlign: 'center', padding: '40px', color: '#484f58', fontSize: '14px',
+    textAlign: 'center', padding: '40px', color: '#7d8590', fontSize: '14px',
   },
   refreshBtn: {
     background: '#21262d', border: '1px solid #30363d', color: '#8b949e',
@@ -275,6 +275,7 @@ export default function LogTable({ apiBase }) {
 
         {/* Source type filter */}
         <select style={s.select} value={sourceType}
+          aria-label="Filter by source type"
           onChange={e => setSourceType(e.target.value)}>
           <option value="">All Sources</option>
           {SOURCE_TYPES.map(t => (
@@ -284,6 +285,7 @@ export default function LogTable({ apiBase }) {
 
         {/* Level filter */}
         <select style={s.select} value={level}
+          aria-label="Filter by log level"
           onChange={e => setLevel(e.target.value)}>
           <option value="">All Levels</option>
           {LEVELS.map(l => (
