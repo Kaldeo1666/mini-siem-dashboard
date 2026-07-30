@@ -45,7 +45,7 @@ export default function TopIPsTable({ apiBase }) {
       padding: '8px 16px', textAlign: 'left', borderBottom: '1px solid #30363d',
     },
     td: { padding: '9px 16px', borderBottom: '1px solid #21262d', color: '#c9d1d9' },
-    empty: { padding: '40px', textAlign: 'center', color: '#484f58', fontSize: '14px' },
+    empty: { padding: '40px', textAlign: 'center', color: '#7d8590', fontSize: '14px' },
   }
 
   return (

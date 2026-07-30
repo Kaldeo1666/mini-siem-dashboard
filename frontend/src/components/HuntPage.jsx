@@ -98,7 +98,7 @@ export default function HuntPage({ apiBase }) {
       <div style={s.card}>
         <div style={s.title}>💾 Saved Hunts</div>
         {savedHunts.length === 0 ? (
-          <div style={{ color: '#484f58', fontSize: '13px' }}>No saved hunts yet.</div>
+          <div style={{ color: '#7d8590', fontSize: '13px' }}>No saved hunts yet.</div>
         ) : (
           savedHunts.map(h => (
             <div key={h.id} style={s.sidebarItem}>
@@ -156,7 +156,7 @@ export default function HuntPage({ apiBase }) {
           <div style={s.title}>Results {total > 0 && `(${total.toLocaleString()})`}</div>
           {error && <div style={{ color: '#f85149', fontSize: '13px', marginBottom: '10px' }}>⚠ {error}</div>}
           {results.length === 0 ? (
-            <div style={{ color: '#484f58', fontSize: '13px', textAlign: 'center', padding: '30px' }}>
+            <div style={{ color: '#7d8590', fontSize: '13px', textAlign: 'center', padding: '30px' }}>
               {loading ? '⏳ Running…' : 'Run a preview to see matching logs.'}
             </div>
           ) : (

@@ -53,7 +53,7 @@ export default function DemoControls({ apiBase }) {
     button: {
       background: isRunning ? COLORS.severity.MEDIUM.bg : COLORS.severity.HIGH.color,
       border: `1px solid ${isRunning ? COLORS.severity.MEDIUM.color : COLORS.severity.HIGH.color}`,
-      color: isRunning ? COLORS.severity.MEDIUM.color : '#fff',
+      color: isRunning ? COLORS.severity.MEDIUM.color : '#1a1206',
       borderRadius: '6px', padding: '5px 14px', fontSize: '13px',
       cursor: isRunning ? 'not-allowed' : 'pointer', fontWeight: 600,
     },

@@ -61,7 +61,7 @@ export default function StatsBar({ apiBase }) {
               <span style={{ fontSize: '22px', fontWeight: 700, color: c.text }}>
                 {count.toLocaleString()}
               </span>
-              <span style={{ fontSize: '11px', color: c.text, opacity: 0.8, marginTop: '2px' }}>
+              <span style={{ fontSize: '11px', color: c.text, marginTop: '2px' }}>
                 {c.icon} {level}
               </span>
             </div>
